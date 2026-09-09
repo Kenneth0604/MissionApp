@@ -14,12 +14,12 @@ export const USERS = {
   A: {
     code: 'A',
     email: import.meta.env.VITE_USER_A_EMAIL || 'Kenneth_Lin@missionapp.app',
-    name: import.meta.env.VITE_USER_A_NAME || 'Kenneth',
+    name: import.meta.env.VITE_USER_A_NAME || '沼王',
   },
   B: {
     code: 'B',
     email: import.meta.env.VITE_USER_B_EMAIL || 'Juniper_Kuo@missionapp.app',
-    name: import.meta.env.VITE_USER_B_NAME || 'Juniper',
+    name: import.meta.env.VITE_USER_B_NAME || '土王',
   },
 }
 

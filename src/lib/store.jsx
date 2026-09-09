@@ -329,11 +329,11 @@ export function StoreProvider({ children }) {
 
   // ---------- 寫入:類別 ----------
   const createCategory = useCallback(
-    async ({ kind, name, emoji }) => {
+    async ({ kind, name, description }) => {
       const sort_order = categories.filter((c) => c.kind === kind).length
       const { data, error } = await supabase
         .from('categories')
-        .insert({ kind, name: name.trim(), emoji: emoji?.trim() || null, sort_order, created_by: userId })
+        .insert({ kind, name: name.trim(), description: description?.trim() || null, sort_order, created_by: userId })
         .select()
         .single()
       throwIf(error)
@@ -344,8 +344,11 @@ export function StoreProvider({ children }) {
   )
 
   const updateCategory = useCallback(
-    async (id, { name, emoji }) => {
-      const { error } = await supabase.from('categories').update({ name: name.trim(), emoji: emoji?.trim() || null }).eq('id', id)
+    async (id, { name, description }) => {
+      const { error } = await supabase
+        .from('categories')
+        .update({ name: name.trim(), description: description?.trim() || null })
+        .eq('id', id)
       throwIf(error)
       await refresh()
     },

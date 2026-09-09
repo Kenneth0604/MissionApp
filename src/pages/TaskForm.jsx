@@ -11,9 +11,19 @@ export default function TaskForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, nameOf, tasks, rewards, createTask, updateTask } = useStore()
+  const { user, nameOf, tasks, rewards, categories, createTask, updateTask } = useStore()
   const editing = id ? tasks.find((t) => t.id === id) : null
   const activeRewards = rewards.filter((r) => r.is_active && r.stock !== 0)
+  // 指定獎勵:先選分類再選細項。只列出有可用獎勵的分類;沒分類的獎勵歸在「未分類」
+  const rewardCats = [
+    ...categories.filter((c) => c.kind === 'reward' && activeRewards.some((r) => r.category_id === c.id)),
+    ...(activeRewards.some((r) => !r.category_id) ? [{ id: 'none', name: '未分類' }] : []),
+  ]
+  const [rewardCat, setRewardCat] = useState(() => {
+    const cur = editing?.reward_id ? rewards.find((r) => r.id === editing.reward_id) : null
+    return cur ? cur.category_id || 'none' : ''
+  })
+  const rewardsInCat = activeRewards.filter((r) => (rewardCat === 'none' ? !r.category_id : r.category_id === rewardCat))
 
   const [form, setForm] = useState(() => ({
     title: editing?.title ?? '',
@@ -119,17 +129,39 @@ export default function TaskForm() {
             獎勵目錄還沒有可用的獎勵,<Link to="/rewards/new" className="text-primary underline">先新增一個</Link>。
           </p>
         ) : (
-          <>
-            <select value={form.reward_id} onChange={set('reward_id')} className="input mt-2">
-              <option value="">選擇獎勵…</option>
-              {activeRewards.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.category?.emoji ? `${r.category.emoji} ` : ''}{r.name}{r.stock > 0 ? `(剩 ${r.stock})` : ''}
-                </option>
+          <div className="mt-2 space-y-2">
+            <p className="text-xs text-muted">先選分類</p>
+            <div className="flex flex-wrap gap-2">
+              {rewardCats.map((c) => (
+                <button
+                  type="button"
+                  key={c.id}
+                  onClick={() => { setRewardCat(c.id); patch({ reward_id: '' }) }}
+                  className={`chip py-1.5 text-sm ${rewardCat === c.id ? 'chip-active' : ''}`}
+                >
+                  {c.name}
+                </button>
               ))}
-            </select>
-            <p className="mt-1.5 text-xs text-muted">核准後會直接產生一筆待交付的兌換,不需扣積分。</p>
-          </>
+            </div>
+            {rewardCat && (
+              <>
+                <p className="text-xs text-muted">再選獎勵</p>
+                <div className="flex flex-wrap gap-2">
+                  {rewardsInCat.map((r) => (
+                    <button
+                      type="button"
+                      key={r.id}
+                      onClick={() => patch({ reward_id: r.id })}
+                      className={`chip py-1.5 text-sm ${form.reward_id === r.id ? 'chip-active' : ''}`}
+                    >
+                      🎁 {r.name}{r.stock > 0 ? `(剩 ${r.stock})` : ''}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <p className="text-xs text-muted">核准後會直接產生一筆待交付的兌換,不需扣積分。</p>
+          </div>
         )}
       </Field>
 

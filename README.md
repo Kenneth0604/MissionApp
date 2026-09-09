@@ -14,7 +14,7 @@
 
 | 區塊 | 內容 |
 | --- | --- |
-| 登入 | 選「我是 Kenneth / 我是 Juniper」+ 密碼。密碼由 Supabase Auth 以 bcrypt 雜湊儲存 |
+| 登入 | 選「我是 沼王 / 我是 土王」+ 密碼。密碼由 Supabase Auth 以 bcrypt 雜湊儲存 |
 | 任務 | 建立 / 編輯(標題、類別、說明、圖片、指派對象、獎勵、期限、重複)、標記完成、核准 / 退回(附原因) |
 | 任務獎勵 | 可選「積分」或「指定獎勵目錄中的獎勵」;指定獎勵在核准後自動變成一筆待交付兌換,不扣點 |
 | 重複任務 | 每天 / 每週幾;**核准後**才產生下一期;可停用 |
@@ -53,8 +53,8 @@ requested(待確認)→ fulfilled(已交付:扣點、扣庫存)
 
 1. Authentication → Users → **Add user** → **Create new user**。
 2. 分別建立:
-   - Email `Kenneth_Lin@missionapp.app`,密碼自訂 → **Kenneth**(A)的登入密碼
-   - Email `Juniper_Kuo@missionapp.app`,密碼自訂 → **Juniper**(B)的登入密碼
+   - Email `Kenneth_Lin@missionapp.app`,密碼自訂 → **沼王**(A)的登入密碼
+   - Email `Juniper_Kuo@missionapp.app`,密碼自訂 → **土王**(B)的登入密碼
 3. 兩個都勾選 **Auto Confirm User**。
 4. Authentication → Sign In / Providers → Email → 關閉 **Allow new users to sign up**(避免其他人註冊)。
 

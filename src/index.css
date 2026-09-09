@@ -123,6 +123,21 @@ input, textarea, select, [data-selectable] {
 
 img { max-width: 100%; }
 
+/* iOS 的日期輸入框有固定內建寬度,會撐出容器;強制走一般區塊排版 */
+input[type="date"], input[type="time"], input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+}
+input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+
+/* 橫向捲動列:隱藏捲軸 */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* iOS 安全區(瀏海與 Home 指示條) */
 .pt-safe { padding-top: env(safe-area-inset-top); }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom); }

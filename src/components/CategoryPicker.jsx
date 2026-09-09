@@ -11,20 +11,21 @@ export default function CategoryPicker({ kind, value, onChange }) {
   const { categories, createCategory } = useStore()
   const toast = useToast()
   const list = categories.filter((c) => c.kind === kind)
+  const selected = list.find((c) => c.id === value)
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
-  const [emoji, setEmoji] = useState('')
+  const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function onAdd() {
     if (!name.trim()) return toast.error('請輸入類別名稱')
     setBusy(true)
     try {
-      const c = await createCategory({ kind, name, emoji })
+      const c = await createCategory({ kind, name, description })
       onChange(c.id)
       setAdding(false)
       setName('')
-      setEmoji('')
+      setDescription('')
     } catch (err) {
       toast.error(err)
     } finally {
@@ -40,22 +41,24 @@ export default function CategoryPicker({ kind, value, onChange }) {
         </button>
         {list.map((c) => (
           <button type="button" key={c.id} onClick={() => onChange(c.id)} className={`chip ${value === c.id ? 'chip-active' : ''}`}>
-            {c.emoji && <span className="mr-1" aria-hidden>{c.emoji}</span>}
             {c.name}
           </button>
         ))}
         {!adding && (
-          <button type="button" onClick={() => setAdding(true)} className="chip border-dashed text-muted">
+          <button type="button" onClick={() => setAdding(true)} className="chip text-muted">
             ＋ 新類別
           </button>
         )}
       </div>
+      {selected?.description && <p className="mt-1.5 text-xs text-muted">{selected.description}</p>}
       {adding && (
-        <div className="mt-2 flex gap-2">
-          <input value={emoji} onChange={(e) => setEmoji(e.target.value.slice(0, 2))} placeholder="😀" className="input w-16 text-center" aria-label="表情符號(選填)" />
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="類別名稱" className="input flex-1" autoFocus />
-          <button type="button" onClick={onAdd} disabled={busy} className="btn-primary px-3 py-2 text-sm">加入</button>
-          <button type="button" onClick={() => setAdding(false)} className="btn-secondary px-3 py-2 text-sm">取消</button>
+        <div className="mt-2 space-y-2 rounded-xl bg-surface-2 p-3">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="類別名稱" className="input" autoFocus />
+          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="說明(選填)" className="input" />
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setAdding(false)} className="btn-secondary flex-1 py-2 text-sm">取消</button>
+            <button type="button" onClick={onAdd} disabled={busy} className="btn-primary flex-1 py-2 text-sm">加入</button>
+          </div>
         </div>
       )}
     </div>
