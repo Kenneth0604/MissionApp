@@ -89,7 +89,14 @@ async function buildNotices(p: WebhookPayload): Promise<Notice[]> {
     const url = `${APP_BASE}/tasks/${rec.id}`
     const tag = `task-${rec.id}`
 
+    const others = Object.keys(users).filter((id) => id !== rec.created_by)
+    // 完成者(共同任務用 completed_by;一般任務就是被指派者)
+    const doer = rec.completed_by ?? rec.assigned_to
+    // 審核者:共同任務 = 非完成者;一般任務 = 建立者
+    const reviewers = rec.shared ? Object.keys(users).filter((id) => id !== doer) : [rec.created_by]
+
     if (p.type === 'INSERT') {
+      if (rec.shared) return others.map((to) => ({ to, title: '📌 新共同任務', body: `${name(rec.created_by)} 新增:${rec.title}(誰先完成誰拿獎勵)`, url, tag }))
       if (rec.assigned_to === rec.created_by) return []
       return [{ to: rec.assigned_to, title: '📌 新任務', body: `${name(rec.created_by)} 派給你:${rec.title}`, url, tag }]
     }
@@ -97,14 +104,14 @@ async function buildNotices(p: WebhookPayload): Promise<Notice[]> {
     if (p.type === 'UPDATE' && p.old_record && p.old_record.status !== rec.status) {
       switch (rec.status) {
         case 'submitted':
-          return [{ to: rec.created_by, title: '⏳ 任務待審核', body: `${name(rec.assigned_to)} 完成了「${rec.title}」,請審核`, url, tag }]
+          return reviewers.filter((to) => to && to !== doer).map((to) => ({ to, title: '⏳ 任務待審核', body: `${name(doer)} 完成了「${rec.title}」,請審核`, url, tag }))
         case 'approved': {
           const reward =
-            rec.reward_type === 'reward' ? '獎勵已列入待交付' : rec.reward_points > 0 ? `+${rec.reward_points} 積分` : '已核准'
-          return [{ to: rec.assigned_to, title: '✅ 任務已核准', body: `「${rec.title}」${reward}`, url, tag }]
+            rec.reward_type === 'reward' ? '獎勵已列入待交付' : rec.reward_type === 'points' && rec.reward_points > 0 ? `+${rec.reward_points} 積分` : '已核准'
+          return doer ? [{ to: doer, title: '✅ 任務已核准', body: `「${rec.title}」${reward}`, url, tag }] : []
         }
         case 'rejected':
-          return [{ to: rec.assigned_to, title: '↩️ 任務被退回', body: `「${rec.title}」:${rec.reject_reason ?? '請重新處理'}`, url, tag }]
+          return doer ? [{ to: doer, title: '↩️ 任務被退回', body: `「${rec.title}」:${rec.reject_reason ?? '請重新處理'}`, url, tag }] : []
       }
     }
     return []

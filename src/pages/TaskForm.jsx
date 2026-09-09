@@ -30,7 +30,7 @@ export default function TaskForm() {
     description: editing?.description ?? '',
     image_urls: editing?.image_urls ?? [],
     category_id: editing?.category_id ?? '',
-    assigned_to: editing?.assigned_to ?? otherUser(user),
+    assigned_to: editing ? (editing.shared ? 'both' : editing.assigned_to) : otherUser(user),
     reward_type: editing?.reward_type ?? 'points',
     reward_points: editing?.reward_points ?? 10,
     reward_id: editing?.reward_id ?? '',
@@ -42,6 +42,7 @@ export default function TaskForm() {
 
   if (id && !editing) return <p className="text-muted">找不到這個任務</p>
   if (editing && (editing.created_by !== user || editing.status !== 'pending')) {
+    // 只有建立者能在待完成狀態編輯
     return <p className="text-muted">只有建立者能在「待完成」狀態下編輯任務</p>
   }
 
@@ -101,25 +102,34 @@ export default function TaskForm() {
       </Field>
 
       <Field label="指派給">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {['A', 'B'].map((u) => (
             <button type="button" key={u} onClick={() => patch({ assigned_to: u })} className={`chip py-2.5 ${form.assigned_to === u ? 'chip-active' : ''}`}>
               {nameOf(u)}{u === user && '(自己)'}
             </button>
           ))}
+          <button type="button" onClick={() => patch({ assigned_to: 'both' })} className={`chip py-2.5 ${form.assigned_to === 'both' ? 'chip-active' : ''}`}>
+            👥 共同
+          </button>
         </div>
+        {form.assigned_to === 'both' && <p className="mt-1.5 text-xs text-muted">兩人都能標記完成,由另一人審核;有設獎勵的話發給完成的人。</p>}
       </Field>
 
       <Field label="完成獎勵">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button type="button" onClick={() => patch({ reward_type: 'points' })} className={`chip py-2.5 ${form.reward_type === 'points' ? 'chip-active' : ''}`}>
             積分
           </button>
           <button type="button" onClick={() => patch({ reward_type: 'reward' })} className={`chip py-2.5 ${form.reward_type === 'reward' ? 'chip-active' : ''}`}>
             指定獎勵
           </button>
+          <button type="button" onClick={() => patch({ reward_type: 'none' })} className={`chip py-2.5 ${form.reward_type === 'none' ? 'chip-active' : ''}`}>
+            無獎勵
+          </button>
         </div>
-        {form.reward_type === 'points' ? (
+        {form.reward_type === 'none' ? (
+          <p className="mt-2 text-xs text-muted">核准後不會發放任何積分或獎勵。</p>
+        ) : form.reward_type === 'points' ? (
           <div className="mt-2 flex items-center gap-2">
             <input type="number" min="0" inputMode="numeric" value={form.reward_points} onChange={set('reward_points')} className="input" />
             <span className="shrink-0 text-sm text-muted">點</span>

@@ -29,6 +29,15 @@ export const REDEMPTION_LABEL = {
 
 export const otherUser = (code) => (code === 'A' ? 'B' : 'A')
 
+/** 這筆任務是否在 code 的待辦清單(被指派給我,或是共同任務) */
+export const isTodoFor = (t, code) =>
+  (t.shared || t.assigned_to === code) && (t.status === 'pending' || t.status === 'rejected')
+/** code 是否為這筆任務目前的審核者(共同任務 = 非完成者;一般任務 = 建立者) */
+export const isReviewer = (t, code) =>
+  t.status === 'submitted' && (t.shared ? t.completed_by !== code : t.created_by === code)
+/** 一般任務的審核者是建立者;共同任務則是「不是完成者的那個人」 */
+export const reviewerOf = (t) => (t.shared ? (t.completed_by ? otherUser(t.completed_by) : null) : t.created_by)
+
 const StoreContext = createContext(null)
 const WATCHED_TABLES = ['tasks', 'points_ledger', 'rewards', 'redemptions', 'categories']
 const POLL_MS = 60_000
@@ -186,7 +195,9 @@ export function StoreProvider({ children }) {
         created_by_id: t.created_by,
         assigned_to_id: t.assigned_to,
         created_by: codeOf(t.created_by),
-        assigned_to: codeOf(t.assigned_to),
+        assigned_to: t.assigned_to ? codeOf(t.assigned_to) : null,
+        shared: Boolean(t.shared),
+        completed_by: t.completed_by ? codeOf(t.completed_by) : null,
         image_urls: t.image_urls ?? [],
         reward: t.reward_id ? rewardsById[t.reward_id] ?? null : null,
         category: t.category_id ? categoriesById[t.category_id] ?? null : null,
@@ -244,9 +255,10 @@ export function StoreProvider({ children }) {
       description: input.description?.trim() ?? '',
       image_urls: input.image_urls ?? [],
       category_id: input.category_id || null,
-      assigned_to: idOf(input.assigned_to),
+      assigned_to: input.assigned_to === 'both' ? null : idOf(input.assigned_to),
+      shared: input.assigned_to === 'both',
       reward_type: input.reward_type ?? 'points',
-      reward_points: input.reward_type === 'reward' ? 0 : Number(input.reward_points) || 0,
+      reward_points: input.reward_type === 'points' ? Number(input.reward_points) || 0 : 0,
       reward_id: input.reward_type === 'reward' ? input.reward_id || null : null,
       due_date: input.due_date || null,
       recurrence_rule: input.recurrence_rule ?? null,

@@ -1,11 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { useStore } from '../lib/store.jsx'
+import { isReviewer, isTodoFor, useStore } from '../lib/store.jsx'
 
 export default function Layout() {
   const { user, nameOf, tasks, redemptions } = useStore()
 
-  const todo = tasks.filter((t) => t.assigned_to === user && (t.status === 'pending' || t.status === 'rejected')).length
-  const review = tasks.filter((t) => t.created_by === user && t.status === 'submitted').length
+  const todo = tasks.filter((t) => isTodoFor(t, user)).length
+  const review = tasks.filter((t) => isReviewer(t, user)).length
   const pendingRedemptions = redemptions.filter((d) => d.status === 'requested' && d.requested_by !== user).length
 
   const nav = [

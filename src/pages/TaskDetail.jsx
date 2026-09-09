@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useStore } from '../lib/store.jsx'
+import { isReviewer, reviewerOf, useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import RewardTag from '../components/RewardTag.jsx'
@@ -20,10 +20,11 @@ export default function TaskDetail() {
 
   if (!task) return <p className="text-muted">找不到這個任務(可能已被刪除)</p>
 
-  const isAssignee = task.assigned_to === user
+  const isAssignee = task.shared || task.assigned_to === user
   const isCreator = task.created_by === user
   const canSubmit = isAssignee && (task.status === 'pending' || task.status === 'rejected')
-  const canReview = isCreator && task.status === 'submitted'
+  const canReview = isReviewer(task, user)
+  const reviewer = reviewerOf(task)
   const canEdit = isCreator && task.status === 'pending'
   const recurrence = describeRecurrence(task.recurrence_rule)
   const recurrenceActive = task.recurrence_rule && task.recurrence_rule.active !== false
@@ -75,7 +76,8 @@ export default function TaskDetail() {
 
         <dl className="mt-4 grid grid-cols-2 gap-y-3 text-sm">
           <Item label="建立者" value={nameOf(task.created_by)} />
-          <Item label="指派給" value={nameOf(task.assigned_to)} />
+          <Item label="指派給" value={task.shared ? '👥 共同任務' : nameOf(task.assigned_to)} />
+          {task.completed_by && <Item label="完成者" value={nameOf(task.completed_by)} />}
           <Item label="完成獎勵" value={<RewardTag task={task} size="lg" />} />
           <Item
             label="期限"
@@ -97,7 +99,7 @@ export default function TaskDetail() {
           </div>
         )}
         {task.status === 'submitted' && !canReview && (
-          <div className="mt-4 rounded-xl bg-info-soft p-3 text-sm text-info">已標記完成,等待 {nameOf(task.created_by)} 審核。</div>
+          <div className="mt-4 rounded-xl bg-info-soft p-3 text-sm text-info">已標記完成,等待 {reviewer ? nameOf(reviewer) : '對方'} 審核。</div>
         )}
         {task.status === 'approved' && task.reward_type === 'reward' && (
           <div className="mt-4 rounded-xl bg-success-soft p-3 text-sm text-success">
@@ -116,7 +118,7 @@ export default function TaskDetail() {
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setRejecting(true)} disabled={busy} className="btn-danger-outline py-3.5">退回重做</button>
           <button onClick={() => run(() => approveTask(task.id), '已核准')} disabled={busy} className="btn-success py-3.5">
-            核准 {task.reward_type === 'points' ? `+${task.reward_points}` : '🎁'}
+            核准 {task.reward_type === 'points' ? `+${task.reward_points}` : task.reward_type === 'reward' ? '🎁' : ''}
           </button>
         </div>
       )}

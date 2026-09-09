@@ -8,6 +8,9 @@ import { useStore } from '../lib/store.jsx'
 export default function TaskCard({ task }) {
   const { user, nameOf } = useStore()
   const mine = task.assigned_to === user
+  const who = task.shared
+    ? `👥 共同任務${task.completed_by ? ` · ${nameOf(task.completed_by)} 完成` : ''}`
+    : mine ? `${nameOf(task.created_by)} 派給我` : `我派給 ${nameOf(task.assigned_to)}`
   const overdue = isOverdue(task)
   const recurrence = describeRecurrence(task.recurrence_rule)
   const thumb = task.image_urls?.[0]
@@ -19,7 +22,7 @@ export default function TaskCard({ task }) {
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-semibold text-ink">{task.title}</h3>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-            <span>{mine ? `${nameOf(task.created_by)} 派給我` : `我派給 ${nameOf(task.assigned_to)}`}</span>
+            <span>{who}</span>
             <CategoryChip category={task.category} />
             {recurrence && <span className="text-accent">↻ {recurrence}</span>}
           </p>

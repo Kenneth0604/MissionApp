@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useStore } from '../lib/store.jsx'
+import { isReviewer, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 import CategoryFilter from '../components/CategoryFilter.jsx'
 
@@ -21,7 +21,14 @@ export default function Tasks() {
     if (category && category !== 'none' && t.category_id !== category) return false
     if (tab === 'history') return t.status === 'approved'
     if (t.status === 'approved') return false
-    return tab === 'mine' ? t.assigned_to === user : t.created_by === user
+    if (tab === 'mine') {
+      // 我要完成的:指派給我、或共同任務(還沒被對方完成送審的)
+      if (t.shared) return t.status !== 'submitted' || t.completed_by === user
+      return t.assigned_to === user
+    }
+    // 我派出的 / 待我審核的
+    if (t.shared) return isReviewer(t, user)
+    return t.created_by === user
   })
 
   const rank = { submitted: 0, rejected: 1, pending: 2, approved: 3 }

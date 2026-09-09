@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { otherUser, useStore } from '../lib/store.jsx'
+import { isReviewer, isTodoFor, otherUser, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 
 export default function Dashboard() {
@@ -7,9 +7,9 @@ export default function Dashboard() {
   const balance = balanceOf(user)
   const reserved = reservedOf(user)
 
-  const todo = tasks.filter((t) => t.assigned_to === user && (t.status === 'pending' || t.status === 'rejected'))
-  const toReview = tasks.filter((t) => t.created_by === user && t.status === 'submitted')
-  const waitingOther = tasks.filter((t) => t.created_by === user && (t.status === 'pending' || t.status === 'rejected'))
+  const todo = tasks.filter((t) => isTodoFor(t, user))
+  const toReview = tasks.filter((t) => isReviewer(t, user))
+  const waitingOther = tasks.filter((t) => t.created_by === user && !t.shared && t.assigned_to !== user && (t.status === 'pending' || t.status === 'rejected'))
   const toFulfill = redemptions.filter((d) => d.status === 'requested' && d.requested_by !== user)
 
   return (

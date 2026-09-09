@@ -65,7 +65,7 @@ requested(待確認)→ fulfilled(已交付:扣點、扣庫存)
 ### 3. 執行 SQL migration
 
 1. SQL Editor → New query。
-2. 貼上 [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) 全部內容 → **Run**。
+2. 依序貼上並執行 `supabase/migrations/` 內的 `0001_init.sql`、`0003_categories_description.sql`、`0004_shared_tasks.sql`(0002 是推播 webhook,見第 6 步)。
 3. 最後一行 `select` 應該列出 `A`、`B` 兩列。若是空的,代表 step 2 的 email 沒對上。
 
 這份 SQL 會建立:資料表、RLS policy、所有 RPC 函式、`images` Storage bucket 與其 policy、Realtime publication、keep-alive 函式。
