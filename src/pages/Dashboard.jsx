@@ -47,7 +47,7 @@ export default function Dashboard() {
             {toFulfill.map((d) => (
               <Link key={d.id} to="/redemptions" className="card flex items-center justify-between p-4">
                 <div>
-                  <p className="font-semibold text-ink">🎁 {d.reward?.name ?? '獎勵'}</p>
+                  <p className="font-semibold text-ink">{d.reward?.name ?? '獎勵'}</p>
                   <p className="text-xs text-muted">{nameOf(d.requested_by)} {d.source === 'task' ? '完成任務獲得' : '申請兌換'}</p>
                 </div>
                 <span className="text-sm text-primary">前往確認 →</span>

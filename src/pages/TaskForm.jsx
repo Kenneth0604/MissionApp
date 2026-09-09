@@ -139,36 +139,38 @@ export default function TaskForm() {
             獎勵目錄還沒有可用的獎勵,<Link to="/rewards/new" className="text-primary underline">先新增一個</Link>。
           </p>
         ) : (
-          <div className="mt-2 space-y-2">
-            <p className="text-xs text-muted">先選分類</p>
-            <div className="flex flex-wrap gap-2">
-              {rewardCats.map((c) => (
-                <button
-                  type="button"
-                  key={c.id}
-                  onClick={() => { setRewardCat(c.id); patch({ reward_id: '' }) }}
-                  className={`chip py-1.5 text-sm ${rewardCat === c.id ? 'chip-active' : ''}`}
-                >
-                  {c.name}
-                </button>
-              ))}
+          <div className="mt-3 space-y-3 rounded-2xl bg-surface-2 p-3">
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted">1. 選分類</p>
+              <div className="flex flex-wrap gap-2">
+                {rewardCats.map((c) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    onClick={() => { setRewardCat(c.id); patch({ reward_id: '' }) }}
+                    className={`chip py-2 ${rewardCat === c.id ? 'chip-active' : ''}`}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
             </div>
             {rewardCat && (
-              <>
-                <p className="text-xs text-muted">再選獎勵</p>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted">2. 選獎勵</p>
                 <div className="flex flex-wrap gap-2">
                   {rewardsInCat.map((r) => (
                     <button
                       type="button"
                       key={r.id}
                       onClick={() => patch({ reward_id: r.id })}
-                      className={`chip py-1.5 text-sm ${form.reward_id === r.id ? 'chip-active' : ''}`}
+                      className={`chip py-2 ${form.reward_id === r.id ? 'bg-accent text-white ring-accent' : ''}`}
                     >
-                      🎁 {r.name}{r.stock > 0 ? `(剩 ${r.stock})` : ''}
+                      {r.name}{r.stock > 0 ? `(剩 ${r.stock})` : ''}
                     </button>
                   ))}
                 </div>
-              </>
+              </div>
             )}
             <p className="text-xs text-muted">核准後會直接產生一筆待交付的兌換,不需扣積分。</p>
           </div>

@@ -73,7 +73,7 @@ export default function Redemptions() {
                     <img src={d.reward.image_urls[0]} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover ring-1 ring-line" loading="lazy" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-ink">🎁 {d.reward?.name ?? '獎勵'}</h3>
+                    <h3 className="font-semibold text-ink">{d.reward?.name ?? '獎勵'}</h3>
                     <p className="mt-0.5 text-xs text-muted">
                       {mine ? '我' : nameOf(d.requested_by)}
                       {d.source === 'task' ? `完成任務「${d.task?.title ?? ''}」獲得` : '申請兌換'}

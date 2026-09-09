@@ -7,7 +7,7 @@ export default function RewardTag({ task, size = 'md' }) {
   if (task.reward_type === 'reward') {
     return (
       <span className={`inline-flex items-center gap-1 font-bold text-accent ${big ? 'text-lg' : 'text-sm'}`}>
-        🎁 {task.reward?.name ?? '獎勵'}
+        {task.reward?.name ?? '獎勵'}
       </span>
     )
   }

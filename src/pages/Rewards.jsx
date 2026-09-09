@@ -77,7 +77,7 @@ export default function Rewards() {
                     </button>
                   )}
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-ink">🎁 {r.name}</h3>
+                    <h3 className="font-semibold text-ink">{r.name}</h3>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                       <CategoryChip category={r.category} />
                       <span>{r.stock === -1 ? '無限供應' : soldOut ? '已兌換完' : `剩 ${r.stock} 份`}</span>

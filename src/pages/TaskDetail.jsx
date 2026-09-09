@@ -118,7 +118,7 @@ export default function TaskDetail() {
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setRejecting(true)} disabled={busy} className="btn-danger-outline py-3.5">退回重做</button>
           <button onClick={() => run(() => approveTask(task.id), '已核准')} disabled={busy} className="btn-success py-3.5">
-            核准 {task.reward_type === 'points' ? `+${task.reward_points}` : task.reward_type === 'reward' ? '🎁' : ''}
+            核准{task.reward_type === 'points' ? ` +${task.reward_points}` : task.reward_type === 'reward' ? ` · ${task.reward?.name ?? '獎勵'}` : ''}
           </button>
         </div>
       )}
