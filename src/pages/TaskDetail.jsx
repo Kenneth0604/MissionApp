@@ -145,7 +145,7 @@ export default function TaskDetail() {
           )}
           {recurrenceActive && (
             <button
-              onClick={() => confirm('停用後,這個任務核准時不會再產生下一期。確定?') && run(() => stopRecurrence(task.id), '已停用重複')}
+              onClick={() => confirm('停用後,這個系列不會再產生下一期(所有進行中的期別一起停用)。確定?') && run(() => stopRecurrence(task.id), '已停用重複')}
               disabled={busy}
               className="chip"
             >

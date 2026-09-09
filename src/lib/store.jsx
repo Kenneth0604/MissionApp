@@ -258,20 +258,40 @@ export function StoreProvider({ children }) {
 
   // ---------- 寫入:任務 ----------
   const toTaskRow = useCallback(
-    (input) => ({
-      title: input.title.trim(),
-      description: input.description?.trim() ?? '',
-      image_urls: input.image_urls ?? [],
-      category_id: input.category_id || null,
-      priority: Math.min(5, Math.max(1, Number(input.priority) || 3)),
-      assigned_to: input.assigned_to === 'both' ? null : idOf(input.assigned_to),
-      shared: input.assigned_to === 'both',
-      reward_type: input.reward_type ?? 'points',
-      reward_points: input.reward_type === 'points' ? Number(input.reward_points) || 0 : 0,
-      reward_id: input.reward_type === 'reward' ? input.reward_id || null : null,
-      due_date: input.due_date || null,
-      recurrence_rule: input.recurrence_rule ?? null,
-    }),
+    (input) => {
+      const row = {
+        title: input.title.trim(),
+        description: input.description?.trim() ?? '',
+        image_urls: input.image_urls ?? [],
+        category_id: input.category_id || null,
+        priority: Math.min(5, Math.max(1, Number(input.priority) || 3)),
+        assigned_to: input.assigned_to === 'both' ? null : idOf(input.assigned_to),
+        shared: input.assigned_to === 'both',
+        reward_type: input.reward_type ?? 'points',
+        reward_points: input.reward_type === 'points' ? Number(input.reward_points) || 0 : 0,
+        reward_id: input.reward_type === 'reward' ? input.reward_id || null : null,
+        due_date: input.due_date || null,
+        recurrence_rule: input.recurrence_rule ?? null,
+      }
+      // 週期任務:規則裡帶著「系列範本」,之後每一期都照範本產生;
+      // 若傳進來的規則已經有範本(只改這一期),就原樣保留
+      if (row.recurrence_rule && !row.recurrence_rule.template) {
+        row.recurrence_rule = {
+          ...row.recurrence_rule,
+          template: {
+            title: row.title,
+            description: row.description,
+            image_urls: row.image_urls,
+            category_id: row.category_id,
+            priority: row.priority,
+            reward_type: row.reward_type,
+            reward_points: row.reward_points,
+            reward_id: row.reward_id,
+          },
+        }
+      }
+      return row
+    },
     [idOf],
   )
 
@@ -291,6 +311,18 @@ export function StoreProvider({ children }) {
       const { error } = await supabase.from('tasks').update(toTaskRow(input)).eq('id', id)
       throwIf(error)
       await refresh()
+    },
+    [toTaskRow, refresh],
+  )
+
+  /** 編輯整個系列:所有進行中的期別一起更新內容與規則(範本一併更新) */
+  const updateSeries = useCallback(
+    async (id, input) => {
+      const { due_date: _due, recurrence_rule, ...fields } = toTaskRow(input)
+      const { data, error } = await supabase.rpc('update_series', { p_task_id: id, p_fields: fields, p_rule: recurrence_rule })
+      throwIf(error)
+      await refresh()
+      return data
     },
     [toTaskRow, refresh],
   )
@@ -408,6 +440,7 @@ export function StoreProvider({ children }) {
       reservedOf,
       createTask,
       updateTask,
+      updateSeries,
       deleteTask,
       submitTask,
       approveTask,
@@ -425,7 +458,7 @@ export function StoreProvider({ children }) {
     [
       authUser, user, userId, users, nameOf, ready, fatal, login, logout, retry, refresh,
       tasks, ledger, rewards, redemptions, categories, categoriesById, balanceOf, reservedOf,
-      createTask, updateTask, deleteTask, submitTask, approveTask, rejectTask, stopRecurrence,
+      createTask, updateTask, updateSeries, deleteTask, submitTask, approveTask, rejectTask, stopRecurrence,
       createReward, updateReward, requestRedemption, fulfillRedemption, rejectRedemption,
       createCategory, updateCategory, deleteCategory,
     ],

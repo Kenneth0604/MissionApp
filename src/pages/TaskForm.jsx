@@ -6,7 +6,7 @@ import ImageUploader from '../components/ImageUploader.jsx'
 import CategoryPicker from '../components/CategoryPicker.jsx'
 import { mainsOf, matchesFilter, subsOf } from '../lib/categories.js'
 import { DEFAULT_PRIORITY, PRIORITIES } from '../lib/priority.js'
-import { appTodayISO } from '../lib/format.js'
+import { appTodayISO, describeRecurrence } from '../lib/format.js'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -14,8 +14,11 @@ export default function TaskForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, nameOf, tasks, rewards, categories, categoriesById, createTask, updateTask } = useStore()
+  const { user, nameOf, tasks, rewards, categories, categoriesById, createTask, updateTask, updateSeries } = useStore()
   const editing = id ? tasks.find((t) => t.id === id) : null
+  // 週期任務編輯範圍:'one' 只改這一期 / 'series' 改整個系列
+  const isSeries = Boolean(editing?.recurrence_rule)
+  const [scope, setScope] = useState('one')
   const activeRewards = rewards.filter((r) => r.is_active && r.stock !== 0)
   // 指定獎勵:主類別 → 次類別(可略)→ 獎勵。只列出有可用獎勵的類別;沒分類的獎勵歸在「未分類」
   const rewardMains = [
@@ -81,7 +84,16 @@ export default function TaskForm() {
 
     setBusy(true)
     try {
-      if (editing) {
+      if (editing && isSeries && scope === 'one') {
+        // 只改這一期:規則(含系列範本)原樣保留,之後的期別不受影響
+        await updateTask(editing.id, { ...payload, recurrence_rule: editing.recurrence_rule })
+        toast.success('已更新這一期')
+        navigate(`/tasks/${editing.id}`, { replace: true })
+      } else if (editing && isSeries) {
+        const n = await updateSeries(editing.id, payload)
+        toast.success(`已更新整個系列(${n} 期)`)
+        navigate(`/tasks/${editing.id}`, { replace: true })
+      } else if (editing) {
         await updateTask(editing.id, payload)
         navigate(`/tasks/${editing.id}`, { replace: true })
       } else {
@@ -99,6 +111,25 @@ export default function TaskForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       <h2 className="text-xl font-bold text-ink">{editing ? '編輯任務' : '新任務'}</h2>
+
+      {isSeries && (
+        <div className="rounded-2xl bg-surface-2 p-3">
+          <p className="mb-2 text-xs font-medium text-muted">這是週期性任務,要改哪個範圍?</p>
+          <div className="flex rounded-xl bg-surface p-1">
+            <button type="button" onClick={() => setScope('one')} className={`flex-1 rounded-lg py-2 text-sm font-medium ${scope === 'one' ? 'bg-primary text-primary-fg shadow-sm' : 'text-muted'}`}>
+              只改這一期
+            </button>
+            <button type="button" onClick={() => setScope('series')} className={`flex-1 rounded-lg py-2 text-sm font-medium ${scope === 'series' ? 'bg-primary text-primary-fg shadow-sm' : 'text-muted'}`}>
+              改整個系列
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {scope === 'one'
+              ? '例如今天改成「練吉他」:只有這一期會變,明天的新一期仍照系列原本的內容。'
+              : '會更新所有還沒完成的期別,之後產生的每一期也都用新的內容與重複設定。'}
+          </p>
+        </div>
+      )}
 
       <Field label="標題">
         <input value={form.title} onChange={set('title')} placeholder="例如:倒垃圾" className="input" autoFocus={!editing} />
@@ -226,6 +257,13 @@ export default function TaskForm() {
         <input type="date" value={form.due_date} onChange={set('due_date')} className="input" />
       </Field>
 
+      {isSeries && scope === 'one' ? (
+        <Field label="重複">
+          <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-sm text-muted">
+            {describeRecurrence(editing.recurrence_rule)} · 要改重複設定請切換到「改整個系列」
+          </p>
+        </Field>
+      ) : (
       <Field label="重複">
         <div className="flex gap-2">
           {[['none', '不重複'], ['daily', '每天'], ['weekly', '每週']].map(([k, label]) => (
@@ -264,6 +302,7 @@ export default function TaskForm() {
           </div>
         )}
       </Field>
+      )}
 
       <div className="flex gap-3 pt-2">
         <button type="button" onClick={() => navigate(-1)} className="btn-secondary flex-1">取消</button>
