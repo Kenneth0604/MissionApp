@@ -6,7 +6,7 @@ import { disablePush, enablePush, getCurrentSubscription, pushEnvironment } from
 import CategoryManager from '../components/CategoryManager.jsx'
 
 export default function Settings() {
-  const { user, userId, logout } = useStore()
+  const { user, nameOf, userId, logout } = useStore()
   const { theme, setTheme } = useTheme()
   const toast = useToast()
   const [env, setEnv] = useState(pushEnvironment)
@@ -101,7 +101,7 @@ export default function Settings() {
         <h2 className="section-title">帳號</h2>
         <div className="card flex items-center justify-between p-4">
           <div>
-            <p className="font-semibold text-ink">我是 {user}</p>
+            <p className="font-semibold text-ink">{nameOf(user)}</p>
             <p className="text-xs text-muted">登入狀態會保留在這台裝置</p>
           </div>
           <button onClick={logout} className="btn-secondary py-2 text-sm">登出</button>

@@ -7,7 +7,7 @@ import CategoryChip from '../components/CategoryChip.jsx'
 import ImageGallery from '../components/ImageGallery.jsx'
 
 export default function Rewards() {
-  const { user, rewards, balanceOf, reservedOf, requestRedemption } = useStore()
+  const { user, nameOf, rewards, balanceOf, reservedOf, requestRedemption } = useStore()
   const toast = useToast()
   const [showInactive, setShowInactive] = useState(false)
   const [category, setCategory] = useState('')
@@ -81,7 +81,7 @@ export default function Rewards() {
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                       <CategoryChip category={r.category} />
                       <span>{r.stock === -1 ? '無限供應' : soldOut ? '已兌換完' : `剩 ${r.stock} 份`}</span>
-                      <span>由 {r.created_by} 新增</span>
+                      <span>由 {nameOf(r.created_by)} 新增</span>
                       {!r.is_active && <span>已停用</span>}
                     </div>
                     {r.description && <p className="mt-1 text-sm text-muted">{r.description}</p>}

@@ -12,7 +12,7 @@ export default function TaskDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, tasks, submitTask, approveTask, rejectTask, deleteTask, stopRecurrence } = useStore()
+  const { user, nameOf, tasks, submitTask, approveTask, rejectTask, deleteTask, stopRecurrence } = useStore()
   const task = tasks.find((t) => t.id === id)
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
@@ -74,8 +74,8 @@ export default function TaskDetail() {
         )}
 
         <dl className="mt-4 grid grid-cols-2 gap-y-3 text-sm">
-          <Item label="建立者" value={task.created_by} />
-          <Item label="指派給" value={task.assigned_to} />
+          <Item label="建立者" value={nameOf(task.created_by)} />
+          <Item label="指派給" value={nameOf(task.assigned_to)} />
           <Item label="完成獎勵" value={<RewardTag task={task} size="lg" />} />
           <Item
             label="期限"
@@ -97,7 +97,7 @@ export default function TaskDetail() {
           </div>
         )}
         {task.status === 'submitted' && !canReview && (
-          <div className="mt-4 rounded-xl bg-info-soft p-3 text-sm text-info">已標記完成,等待 {task.created_by} 審核。</div>
+          <div className="mt-4 rounded-xl bg-info-soft p-3 text-sm text-info">已標記完成,等待 {nameOf(task.created_by)} 審核。</div>
         )}
         {task.status === 'approved' && task.reward_type === 'reward' && (
           <div className="mt-4 rounded-xl bg-success-soft p-3 text-sm text-success">

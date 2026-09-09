@@ -11,7 +11,7 @@ export default function TaskForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, tasks, rewards, createTask, updateTask } = useStore()
+  const { user, nameOf, tasks, rewards, createTask, updateTask } = useStore()
   const editing = id ? tasks.find((t) => t.id === id) : null
   const activeRewards = rewards.filter((r) => r.is_active && r.stock !== 0)
 
@@ -94,7 +94,7 @@ export default function TaskForm() {
         <div className="grid grid-cols-2 gap-2">
           {['A', 'B'].map((u) => (
             <button type="button" key={u} onClick={() => patch({ assigned_to: u })} className={`chip py-2.5 ${form.assigned_to === u ? 'chip-active' : ''}`}>
-              {u}{u === user && '(自己)'}
+              {nameOf(u)}{u === user && '(自己)'}
             </button>
           ))}
         </div>

@@ -6,7 +6,7 @@ import { describeRecurrence, formatDate, isOverdue } from '../lib/format.js'
 import { useStore } from '../lib/store.jsx'
 
 export default function TaskCard({ task }) {
-  const { user } = useStore()
+  const { user, nameOf } = useStore()
   const mine = task.assigned_to === user
   const overdue = isOverdue(task)
   const recurrence = describeRecurrence(task.recurrence_rule)
@@ -19,7 +19,7 @@ export default function TaskCard({ task }) {
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-semibold text-ink">{task.title}</h3>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-            <span>{mine ? `${task.created_by} 派給我` : `我派給 ${task.assigned_to}`}</span>
+            <span>{mine ? `${nameOf(task.created_by)} 派給我` : `我派給 ${nameOf(task.assigned_to)}`}</span>
             <CategoryChip category={task.category} />
             {recurrence && <span className="text-accent">↻ {recurrence}</span>}
           </p>

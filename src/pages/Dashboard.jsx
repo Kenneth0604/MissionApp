@@ -3,7 +3,7 @@ import { otherUser, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 
 export default function Dashboard() {
-  const { user, tasks, redemptions, balanceOf, reservedOf } = useStore()
+  const { user, nameOf, tasks, redemptions, balanceOf, reservedOf } = useStore()
   const balance = balanceOf(user)
   const reserved = reservedOf(user)
 
@@ -31,7 +31,7 @@ export default function Dashboard() {
       </section>
 
       <Link to="/tasks/new" className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 py-3.5 font-semibold text-primary">
-        <span className="text-xl leading-none">＋</span> 派新任務給 {otherUser(user)}
+        <span className="text-xl leading-none">＋</span> 派新任務給 {nameOf(otherUser(user))}
       </Link>
 
       {toReview.length > 0 && (
@@ -48,7 +48,7 @@ export default function Dashboard() {
               <Link key={d.id} to="/redemptions" className="card flex items-center justify-between p-4">
                 <div>
                   <p className="font-semibold text-ink">🎁 {d.reward?.name ?? '獎勵'}</p>
-                  <p className="text-xs text-muted">{d.requested_by} {d.source === 'task' ? '完成任務獲得' : '申請兌換'}</p>
+                  <p className="text-xs text-muted">{nameOf(d.requested_by)} {d.source === 'task' ? '完成任務獲得' : '申請兌換'}</p>
                 </div>
                 <span className="text-sm text-primary">前往確認 →</span>
               </Link>

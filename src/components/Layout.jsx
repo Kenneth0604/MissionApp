@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useStore } from '../lib/store.jsx'
 
 export default function Layout() {
-  const { user, tasks, redemptions } = useStore()
+  const { user, nameOf, tasks, redemptions } = useStore()
 
   const todo = tasks.filter((t) => t.assigned_to === user && (t.status === 'pending' || t.status === 'rejected')).length
   const review = tasks.filter((t) => t.created_by === user && t.status === 'submitted').length
@@ -21,7 +21,7 @@ export default function Layout() {
       <header className="pt-safe hero sticky top-0 z-10 text-white shadow">
         <div className="flex items-center justify-between px-4 py-3">
           <h1 className="text-lg font-bold tracking-wide">MissionApp</h1>
-          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium">我是 {user}</span>
+          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium">{nameOf(user)}</span>
         </div>
       </header>
 

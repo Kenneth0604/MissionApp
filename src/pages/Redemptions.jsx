@@ -11,7 +11,7 @@ const TABS = [
 ]
 
 export default function Redemptions() {
-  const { user, redemptions, fulfillRedemption, rejectRedemption } = useStore()
+  const { user, nameOf, redemptions, fulfillRedemption, rejectRedemption } = useStore()
   const toast = useToast()
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') === 'history' ? 'history' : 'pending'
@@ -34,8 +34,8 @@ export default function Redemptions() {
   function onFulfill(d) {
     const msg =
       d.cost_points > 0
-        ? `確認已把「${d.reward?.name}」交給 ${d.requested_by}?\n將扣除 ${d.requested_by} ${d.cost_points} 點。`
-        : `確認已把「${d.reward?.name}」交給 ${d.requested_by}?(任務獎勵,不扣點)`
+        ? `確認已把「${d.reward?.name}」交給 ${nameOf(d.requested_by)}?\n將扣除 ${nameOf(d.requested_by)} ${d.cost_points} 點。`
+        : `確認已把「${d.reward?.name}」交給 ${nameOf(d.requested_by)}?(任務獎勵,不扣點)`
     if (!confirm(msg)) return
     act(d.id, () => fulfillRedemption(d.id), '已確認交付')
   }
@@ -75,13 +75,13 @@ export default function Redemptions() {
                   <div className="min-w-0 flex-1">
                     <h3 className="font-semibold text-ink">🎁 {d.reward?.name ?? '獎勵'}</h3>
                     <p className="mt-0.5 text-xs text-muted">
-                      {mine ? '我' : d.requested_by}
+                      {mine ? '我' : nameOf(d.requested_by)}
                       {d.source === 'task' ? `完成任務「${d.task?.title ?? ''}」獲得` : '申請兌換'}
                       {' · '}{formatDateTime(d.created_at)}
                     </p>
                     {d.status === 'rejected' && d.reject_reason && <p className="mt-1 text-xs text-danger">拒絕原因:{d.reject_reason}</p>}
                     {d.status === 'fulfilled' && d.fulfilled_at && (
-                      <p className="mt-1 text-xs text-muted">由 {d.handled_by} 於 {formatDateTime(d.fulfilled_at)} 交付</p>
+                      <p className="mt-1 text-xs text-muted">由 {nameOf(d.handled_by)} 於 {formatDateTime(d.fulfilled_at)} 交付</p>
                     )}
                   </div>
                   <div className="shrink-0 text-right">

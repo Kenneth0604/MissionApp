@@ -2,7 +2,7 @@ import { otherUser, useStore } from '../lib/store.jsx'
 import { formatDateTime } from '../lib/format.js'
 
 export default function Points() {
-  const { user, ledger, balanceOf } = useStore()
+  const { user, nameOf, ledger, balanceOf } = useStore()
   const mine = ledger.filter((l) => l.user_id === user)
   const other = otherUser(user)
 
@@ -14,7 +14,7 @@ export default function Points() {
           <p className="mt-1 text-3xl font-bold tabular-nums">{balanceOf(user)}</p>
         </div>
         <div className="card p-4">
-          <p className="text-xs text-muted">{other} 的積分</p>
+          <p className="text-xs text-muted">{nameOf(other)} 的積分</p>
           <p className="mt-1 text-3xl font-bold tabular-nums text-ink">{balanceOf(other)}</p>
         </div>
       </section>

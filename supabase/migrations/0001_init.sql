@@ -3,9 +3,9 @@
 -- 在 Supabase Dashboard → SQL Editor 直接執行整份檔案。
 --
 -- 執行前請先在 Authentication → Users 建立兩個帳號(勾選 Auto Confirm):
---   a@missionapp.app  → A
---   b@missionapp.app  → B
--- 若使用不同 email,請修改最底部「使用者對照」區塊。
+--   Kenneth_Lin@missionapp.app  → A(顯示名稱 Kenneth)
+--   Juniper_Kuo@missionapp.app  → B(顯示名稱 Juniper)
+-- 若使用不同 email 或想改顯示名稱,請修改最底部「使用者對照」區塊。
 -- ============================================================================
 
 create extension if not exists pgcrypto;
@@ -470,11 +470,11 @@ end $$;
 -- (若你用了不同 email,請改這兩行)
 -- ----------------------------------------------------------------------------
 insert into public.users (id, code, name)
-select id, 'A', 'A' from auth.users where email = 'a@missionapp.app'
+select id, 'A', 'Kenneth' from auth.users where lower(email) = lower('Kenneth_Lin@missionapp.app')
 on conflict (id) do nothing;
 
 insert into public.users (id, code, name)
-select id, 'B', 'B' from auth.users where email = 'b@missionapp.app'
+select id, 'B', 'Juniper' from auth.users where lower(email) = lower('Juniper_Kuo@missionapp.app')
 on conflict (id) do nothing;
 
 -- 檢查:應該要看到兩列

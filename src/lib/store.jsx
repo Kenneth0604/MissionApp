@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { supabase, isConfigured, USER_EMAILS } from './supabase.js'
+import { supabase, isConfigured, USER_EMAILS, USERS } from './supabase.js'
 import { deleteImages } from './images.js'
 
 /**
@@ -147,6 +147,11 @@ export function StoreProvider({ children }) {
   const userId = me?.id ?? null
   const codeOf = useCallback((id) => users.find((u) => u.id === id)?.code ?? '?', [users])
   const idOf = useCallback((code) => users.find((u) => u.code === code)?.id ?? null, [users])
+  /** 顯示名稱:優先用 users 資料表的 name,否則用靜態設定 */
+  const nameOf = useCallback(
+    (code) => users.find((u) => u.code === code)?.name || USERS[code]?.name || code || '?',
+    [users],
+  )
 
   const categories = raw.categories
   const categoriesById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories])
@@ -354,6 +359,7 @@ export function StoreProvider({ children }) {
       user,
       userId,
       users,
+      nameOf,
       ready,
       fatal,
       login,
@@ -383,7 +389,7 @@ export function StoreProvider({ children }) {
       deleteCategory,
     }),
     [
-      authUser, user, userId, users, ready, fatal, login, logout, refresh,
+      authUser, user, userId, users, nameOf, ready, fatal, login, logout, refresh,
       tasks, ledger, rewards, redemptions, categories, balanceOf, reservedOf,
       createTask, updateTask, deleteTask, submitTask, approveTask, rejectTask, stopRecurrence,
       createReward, updateReward, requestRedemption, fulfillRedemption, rejectRedemption,

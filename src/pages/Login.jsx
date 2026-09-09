@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
+import { USERS } from '../lib/supabase.js'
 
-const USERS = ['A', 'B']
+const CODES = ['A', 'B']
 
 export default function Login() {
   const { login } = useStore()
@@ -34,16 +35,16 @@ export default function Login() {
       {!who ? (
         <div className="space-y-3">
           <p className="text-center text-sm text-muted">請選擇你的身分</p>
-          {USERS.map((u) => (
+          {CODES.map((u) => (
             <button key={u} onClick={() => setWho(u)} className="card w-full py-5 text-lg font-semibold text-ink transition active:bg-surface-2">
-              我是 {u}
+              我是 {USERS[u].name}
             </button>
           ))}
         </div>
       ) : (
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-base font-semibold text-ink">我是 {who}</span>
+            <span className="text-base font-semibold text-ink">我是 {USERS[who].name}</span>
             <button type="button" onClick={() => { setWho(null); setPassword(''); setError('') }} className="text-sm text-primary">
               換一個身分
             </button>

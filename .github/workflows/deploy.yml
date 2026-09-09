@@ -33,7 +33,9 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
           VITE_USER_A_EMAIL: ${{ vars.VITE_USER_A_EMAIL }}
+          VITE_USER_A_NAME: ${{ vars.VITE_USER_A_NAME }}
           VITE_USER_B_EMAIL: ${{ vars.VITE_USER_B_EMAIL }}
+          VITE_USER_B_NAME: ${{ vars.VITE_USER_B_NAME }}
         run: npm run build
 
       - uses: actions/configure-pages@v5
