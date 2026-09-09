@@ -7,18 +7,29 @@ import Tasks from './pages/Tasks.jsx'
 import TaskForm from './pages/TaskForm.jsx'
 import TaskDetail from './pages/TaskDetail.jsx'
 import Points from './pages/Points.jsx'
-import ComingSoon from './pages/ComingSoon.jsx'
+import Rewards from './pages/Rewards.jsx'
+import RewardForm from './pages/RewardForm.jsx'
+import Redemptions from './pages/Redemptions.jsx'
+import Settings from './pages/Settings.jsx'
+import SetupNeeded from './pages/SetupNeeded.jsx'
+import Splash from './components/Splash.jsx'
 
 export default function App() {
-  const { user } = useStore()
+  const { configured, authLoading, authUser, ready, fatal, logout } = useStore()
 
-  if (!user) {
+  if (!configured) return <SetupNeeded />
+  if (authLoading) return <Splash />
+
+  if (!authUser) {
     return (
       <Routes>
         <Route path="*" element={<Login />} />
       </Routes>
     )
   }
+
+  if (fatal) return <Splash error={fatal} onLogout={logout} />
+  if (!ready) return <Splash />
 
   return (
     <Routes>
@@ -29,7 +40,11 @@ export default function App() {
         <Route path="tasks/:id" element={<TaskDetail />} />
         <Route path="tasks/:id/edit" element={<TaskForm />} />
         <Route path="points" element={<Points />} />
-        <Route path="rewards" element={<ComingSoon title="獎勵目錄" />} />
+        <Route path="rewards" element={<Rewards />} />
+        <Route path="rewards/new" element={<RewardForm />} />
+        <Route path="rewards/:id/edit" element={<RewardForm />} />
+        <Route path="redemptions" element={<Redemptions />} />
+        <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

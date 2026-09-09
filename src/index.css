@@ -1,14 +1,116 @@
 @import "tailwindcss";
 
-html, body, #root {
-  height: 100%;
+/* ------------------------------------------------------------------
+   主題色票:透過 <html data-theme="blossom|graphite"> 切換
+   Tailwind 工具類別(bg-surface、text-ink、bg-primary ...)引用這些變數
+------------------------------------------------------------------- */
+@theme inline {
+  --color-bg: var(--t-bg);
+  --color-surface: var(--t-surface);
+  --color-surface-2: var(--t-surface-2);
+  --color-line: var(--t-line);
+  --color-ink: var(--t-ink);
+  --color-muted: var(--t-muted);
+  --color-primary: var(--t-primary);
+  --color-primary-fg: var(--t-primary-fg);
+  --color-primary-soft: var(--t-primary-soft);
+  --color-accent: var(--t-accent);
+  --color-accent-soft: var(--t-accent-soft);
+  --color-success: var(--t-success);
+  --color-success-soft: var(--t-success-soft);
+  --color-danger: var(--t-danger);
+  --color-danger-soft: var(--t-danger-soft);
+  --color-warning: var(--t-warning);
+  --color-warning-soft: var(--t-warning-soft);
+  --color-info: var(--t-info);
+  --color-info-soft: var(--t-info-soft);
 }
 
+/* 花漾:粉紅 × 薰衣草(預設) */
+:root,
+[data-theme="blossom"] {
+  color-scheme: light;
+  --t-bg: #fbf4f8;
+  --t-surface: #ffffff;
+  --t-surface-2: #fdeaf3;
+  --t-line: #f3d6e6;
+  --t-ink: #3a2740;
+  --t-muted: #8f7392;
+  --t-primary: #e86aa8;
+  --t-primary-fg: #ffffff;
+  --t-primary-soft: #fde2ef;
+  --t-accent: #a78bfa;
+  --t-accent-soft: #ede9fe;
+  --t-success: #16a37a;
+  --t-success-soft: #d8f5ea;
+  --t-danger: #e0335f;
+  --t-danger-soft: #ffe1ea;
+  --t-warning: #d98a1a;
+  --t-warning-soft: #fdf0d6;
+  --t-info: #7c5cd6;
+  --t-info-soft: #ece6fb;
+  --t-hero-from: #e86aa8;
+  --t-hero-to: #a78bfa;
+}
+
+/* 石墨:黑灰色系 */
+[data-theme="graphite"] {
+  color-scheme: dark;
+  --t-bg: #111316;
+  --t-surface: #1b1e23;
+  --t-surface-2: #252930;
+  --t-line: #30353d;
+  --t-ink: #e8eaee;
+  --t-muted: #97a0ab;
+  --t-primary: #e5e7eb;
+  --t-primary-fg: #111316;
+  --t-primary-soft: #2b3038;
+  --t-accent: #8b93a1;
+  --t-accent-soft: #2a2f37;
+  --t-success: #4ade80;
+  --t-success-soft: #14321f;
+  --t-danger: #fb7185;
+  --t-danger-soft: #45202a;
+  --t-warning: #fbbf24;
+  --t-warning-soft: #3f2f0c;
+  --t-info: #93c5fd;
+  --t-info-soft: #1e2d45;
+  --t-hero-from: #3a3f48;
+  --t-hero-to: #1b1e23;
+}
+
+html, body, #root { height: 100%; }
+
 body {
+  background: var(--t-bg);
+  color: var(--t-ink);
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
 }
 
 /* iOS 安全區(瀏海與 Home 指示條) */
 .pt-safe { padding-top: env(safe-area-inset-top); }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+
+.hero {
+  background: linear-gradient(135deg, var(--t-hero-from), var(--t-hero-to));
+}
+
+@layer components {
+  .card { @apply rounded-2xl bg-surface shadow-sm ring-1 ring-line; }
+  .btn, .btn-primary, .btn-secondary, .btn-success, .btn-danger, .btn-danger-outline {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-2xl px-4 py-3 font-semibold transition active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100;
+  }
+  .btn-primary { @apply bg-primary text-primary-fg shadow; }
+  .btn-secondary { @apply bg-surface text-ink ring-1 ring-line; }
+  .btn-success { @apply bg-success text-white shadow; }
+  .btn-danger { @apply bg-danger text-white shadow; }
+  .btn-danger-outline { @apply bg-surface text-danger ring-1 ring-danger/40; }
+  .chip { @apply inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium ring-1 ring-line bg-surface text-ink; }
+  .chip-active { @apply bg-primary text-primary-fg ring-primary; }
+  .input { @apply w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/25; }
+  .label { @apply mb-1.5 block text-sm font-medium text-ink; }
+  .section-title { @apply mb-2 flex items-center gap-2 text-sm font-semibold text-ink; }
+  .empty { @apply rounded-2xl bg-surface p-6 text-center text-sm text-muted shadow-sm ring-1 ring-line; }
+}

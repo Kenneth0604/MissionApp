@@ -2,13 +2,16 @@
   "name": "MissionApp 任務獎勵",
   "short_name": "MissionApp",
   "description": "雙人任務與獎勵管理",
+  "id": "/MissionApp/",
   "start_url": "/MissionApp/",
   "scope": "/MissionApp/",
   "display": "standalone",
-  "background_color": "#f1f5f9",
-  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "background_color": "#fbf4f8",
+  "theme_color": "#e86aa8",
   "icons": [
-    { "src": "/MissionApp/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/MissionApp/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/MissionApp/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/MissionApp/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/MissionApp/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

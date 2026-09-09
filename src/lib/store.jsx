@@ -1,25 +1,18 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { supabase, isConfigured, USER_EMAILS } from './supabase.js'
+import { deleteImages } from './images.js'
 
 /**
- * 資料層(Prototype 版)
+ * 資料層(Supabase 版)
  * ----------------------------------------------------------------
- * 目前以 localStorage 模擬 Supabase 資料表:users / tasks / points_ledger。
- * 之後接 Supabase 時,只需把這裡的 login / createTask / approveTask ...
- * 換成呼叫 supabase-js,頁面元件不需改動。
- *
- * 注意:MOCK_PASSWORDS 只是 prototype 用,正式版密碼會雜湊存在 Supabase,
- * 由 Edge Function / pgcrypto 比對,不會出現在前端程式碼中。
+ * - 身分:Supabase Auth 兩個固定帳號(A / B),登入畫面只選身分 + 密碼
+ * - 讀取:直接 select 各資料表(受 RLS 保護,只有 A、B 能讀)
+ * - 寫入:涉及狀態流轉、積分、庫存的操作一律走 Postgres RPC
+ *        (submit_task / approve_task / request_redemption ...),
+ *        前端無法直接寫 points_ledger
+ * - 即時:Realtime postgres_changes → 重新抓取;另有 60 秒輪詢與
+ *        回到前景時重抓作為備援
  */
-
-const DATA_KEY = 'missionapp:data:v1'
-const SESSION_KEY = 'missionapp:session:v1'
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 天
-
-export const USERS = [
-  { id: 'A', name: 'A' },
-  { id: 'B', name: 'B' },
-]
-const MOCK_PASSWORDS = { A: '1234', B: '1234' }
 
 export const STATUS_LABEL = {
   pending: '待完成',
@@ -28,220 +21,351 @@ export const STATUS_LABEL = {
   rejected: '已退回',
 }
 
-export const otherUser = (id) => (id === 'A' ? 'B' : 'A')
-
-const uid = () =>
-  globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
-const nowIso = () => new Date().toISOString()
-
-// ---------- 種子資料(第一次開啟時) ----------
-function seed() {
-  const t = nowIso()
-  const tasks = [
-    {
-      id: uid(), title: '倒垃圾', description: '週三晚上記得倒垃圾與回收',
-      created_by: 'A', assigned_to: 'B', reward_points: 10, status: 'pending',
-      due_date: null, recurrence_rule: { freq: 'weekly', day_of_week: 3, active: true },
-      reject_reason: null, created_at: t, updated_at: t,
-    },
-    {
-      id: uid(), title: '整理書桌', description: '把桌面雜物歸位',
-      created_by: 'B', assigned_to: 'A', reward_points: 15, status: 'submitted',
-      due_date: null, recurrence_rule: null, reject_reason: null, created_at: t, updated_at: t,
-    },
-    {
-      id: uid(), title: '洗碗', description: '',
-      created_by: 'A', assigned_to: 'B', reward_points: 5, status: 'approved',
-      due_date: null, recurrence_rule: null, reject_reason: null, created_at: t, updated_at: t,
-    },
-  ]
-  const approved = tasks[2]
-  const ledger = [
-    {
-      id: uid(), user_id: 'B', amount: 5, reason: `任務完成:${approved.title}`,
-      related_task_id: approved.id, related_redemption_id: null, created_at: t,
-    },
-  ]
-  return { tasks, ledger }
+export const REDEMPTION_LABEL = {
+  requested: '待確認',
+  fulfilled: '已交付',
+  rejected: '已拒絕',
 }
 
-function loadData() {
-  try {
-    const raw = localStorage.getItem(DATA_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch {
-    /* ignore */
-  }
-  return seed()
-}
-function saveData(data) {
-  try {
-    localStorage.setItem(DATA_KEY, JSON.stringify(data))
-  } catch {
-    /* ignore */
-  }
-}
-function loadSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY)
-    if (!raw) return null
-    const s = JSON.parse(raw)
-    if (!s.expiresAt || Date.now() > s.expiresAt) {
-      localStorage.removeItem(SESSION_KEY)
-      return null
-    }
-    return s
-  } catch {
-    return null
-  }
-}
+export const otherUser = (code) => (code === 'A' ? 'B' : 'A')
 
-// ---------- 重複任務:計算下一期到期日 ----------
-export function nextDueDate(rule, fromDate) {
-  if (!rule) return null
-  const base = fromDate ? new Date(fromDate) : new Date()
-  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate())
-  if (rule.freq === 'daily') {
-    d.setDate(d.getDate() + 1)
-  } else if (rule.freq === 'weekly') {
-    const target = Number(rule.day_of_week ?? d.getDay())
-    let diff = (target - d.getDay() + 7) % 7
-    if (diff === 0) diff = 7
-    d.setDate(d.getDate() + diff)
-  }
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-// ---------- Context ----------
 const StoreContext = createContext(null)
+const WATCHED_TABLES = ['tasks', 'points_ledger', 'rewards', 'redemptions', 'categories']
+const POLL_MS = 60_000
+const EMPTY = { tasks: [], ledger: [], rewards: [], redemptions: [], categories: [] }
+
+function friendlyAuthError(err) {
+  const m = err?.message || ''
+  if (/invalid login credentials/i.test(m)) return '密碼錯誤'
+  if (/email not confirmed/i.test(m)) return '帳號尚未啟用,請在 Supabase 後台確認 Auto Confirm'
+  if (/rate limit/i.test(m)) return '嘗試太多次,請稍後再試'
+  return m || '登入失敗'
+}
+
+function throwIf(error) {
+  if (error) throw new Error(error.message || String(error))
+}
 
 export function StoreProvider({ children }) {
-  const [data, setData] = useState(loadData)
-  const [session, setSession] = useState(loadSession)
+  const [authUser, setAuthUser] = useState(undefined) // undefined = 尚未得知
+  const [users, setUsers] = useState([])
+  const [raw, setRaw] = useState(EMPTY)
+  const [ready, setReady] = useState(false)
+  const [fatal, setFatal] = useState(null)
+  const refreshTimer = useRef(null)
 
-  useEffect(() => saveData(data), [data])
-
-  const user = session?.userId ?? null
-
-  // ---- 身分 ----
-  const login = useCallback(async (userId, password) => {
-    if (MOCK_PASSWORDS[userId] !== password) throw new Error('密碼錯誤')
-    const s = { userId, token: uid(), expiresAt: Date.now() + SESSION_TTL_MS }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(s))
-    setSession(s)
+  // ---------- Auth ----------
+  useEffect(() => {
+    if (!isConfigured) {
+      setAuthUser(null)
+      return
+    }
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null)
+    })
+    return () => data.subscription.unsubscribe()
   }, [])
 
-  const logout = useCallback(() => {
-    localStorage.removeItem(SESSION_KEY)
-    setSession(null)
+  const login = useCallback(async (code, password) => {
+    if (!isConfigured) throw new Error('尚未設定 Supabase 環境變數')
+    const { error } = await supabase.auth.signInWithPassword({ email: USER_EMAILS[code], password })
+    if (error) throw new Error(friendlyAuthError(error))
   }, [])
 
-  // ---- 任務 ----
-  const mutateTask = useCallback((id, fn) => {
-    setData((d) => ({
-      ...d,
-      tasks: d.tasks.map((t) => (t.id === id ? { ...t, ...fn(t), updated_at: nowIso() } : t)),
-    }))
+  const logout = useCallback(async () => {
+    setReady(false)
+    setRaw(EMPTY)
+    setFatal(null)
+    await supabase?.auth.signOut()
   }, [])
+
+  // ---------- 讀取 ----------
+  const refresh = useCallback(async () => {
+    if (!supabase || !authUser) return
+    const [t, l, r, d, c] = await Promise.all([
+      supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+      supabase.from('points_ledger').select('*').order('created_at', { ascending: false }),
+      supabase.from('rewards').select('*').order('created_at', { ascending: true }),
+      supabase.from('redemptions').select('*').order('created_at', { ascending: false }),
+      supabase.from('categories').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
+    ])
+    throwIf(t.error || l.error || r.error || d.error || c.error)
+    setRaw({ tasks: t.data, ledger: l.data, rewards: r.data, redemptions: d.data, categories: c.data })
+  }, [authUser])
+
+  const scheduleRefresh = useCallback(() => {
+    clearTimeout(refreshTimer.current)
+    refreshTimer.current = setTimeout(() => refresh().catch(() => {}), 300)
+  }, [refresh])
+
+  // 登入後:載入使用者對照表 + 全部資料,並訂閱 Realtime
+  useEffect(() => {
+    if (!authUser) return
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const { data: list, error } = await supabase.from('users').select('id, code, name').order('code')
+        throwIf(error)
+        if (cancelled) return
+        if (!list.some((u) => u.id === authUser.id)) {
+          setFatal('此帳號尚未加入 users 資料表(A / B),請依 README 完成設定。')
+          return
+        }
+        setUsers(list)
+        await refresh()
+        if (!cancelled) setReady(true)
+      } catch (e) {
+        if (!cancelled) setFatal(e.message || '載入資料失敗')
+      }
+    })()
+
+    const channel = supabase.channel('missionapp-db')
+    for (const table of WATCHED_TABLES) {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleRefresh)
+    }
+    channel.subscribe()
+
+    const onVisible = () => document.visibilityState === 'visible' && scheduleRefresh()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    const poll = setInterval(scheduleRefresh, POLL_MS)
+
+    return () => {
+      cancelled = true
+      clearTimeout(refreshTimer.current)
+      clearInterval(poll)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+      supabase.removeChannel(channel)
+    }
+  }, [authUser, refresh, scheduleRefresh])
+
+  // ---------- 對照與正規化 ----------
+  const me = users.find((u) => u.id === authUser?.id) ?? null
+  const user = me?.code ?? null
+  const userId = me?.id ?? null
+  const codeOf = useCallback((id) => users.find((u) => u.id === id)?.code ?? '?', [users])
+  const idOf = useCallback((code) => users.find((u) => u.code === code)?.id ?? null, [users])
+
+  const categories = raw.categories
+  const categoriesById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories])
+
+  const rewards = useMemo(
+    () =>
+      raw.rewards.map((r) => ({
+        ...r,
+        created_by_id: r.created_by,
+        created_by: codeOf(r.created_by),
+        image_urls: r.image_urls ?? [],
+        category: r.category_id ? categoriesById[r.category_id] ?? null : null,
+      })),
+    [raw.rewards, codeOf, categoriesById],
+  )
+  const rewardsById = useMemo(() => Object.fromEntries(rewards.map((r) => [r.id, r])), [rewards])
+
+  const tasks = useMemo(
+    () =>
+      raw.tasks.map((t) => ({
+        ...t,
+        created_by_id: t.created_by,
+        assigned_to_id: t.assigned_to,
+        created_by: codeOf(t.created_by),
+        assigned_to: codeOf(t.assigned_to),
+        image_urls: t.image_urls ?? [],
+        reward: t.reward_id ? rewardsById[t.reward_id] ?? null : null,
+        category: t.category_id ? categoriesById[t.category_id] ?? null : null,
+      })),
+    [raw.tasks, codeOf, rewardsById, categoriesById],
+  )
+  const tasksById = useMemo(() => Object.fromEntries(tasks.map((t) => [t.id, t])), [tasks])
+
+  const ledger = useMemo(
+    () => raw.ledger.map((l) => ({ ...l, user_id_raw: l.user_id, user_id: codeOf(l.user_id) })),
+    [raw.ledger, codeOf],
+  )
+
+  const redemptions = useMemo(
+    () =>
+      raw.redemptions.map((d) => ({
+        ...d,
+        requested_by_id: d.requested_by,
+        requested_by: codeOf(d.requested_by),
+        handled_by: d.handled_by ? codeOf(d.handled_by) : null,
+        reward: rewardsById[d.reward_id] ?? null,
+        task: d.related_task_id ? tasksById[d.related_task_id] ?? null : null,
+      })),
+    [raw.redemptions, codeOf, rewardsById, tasksById],
+  )
+
+  const balanceOf = useCallback(
+    (code) => ledger.filter((l) => l.user_id === code).reduce((s, l) => s + l.amount, 0),
+    [ledger],
+  )
+  /** 尚未交付但已申請的兌換所佔用的積分 */
+  const reservedOf = useCallback(
+    (code) =>
+      redemptions
+        .filter((d) => d.requested_by === code && d.status === 'requested')
+        .reduce((s, d) => s + (d.cost_points || 0), 0),
+    [redemptions],
+  )
+
+  // ---------- 寫入:共用 ----------
+  const rpc = useCallback(
+    async (fn, args) => {
+      const { data, error } = await supabase.rpc(fn, args)
+      throwIf(error)
+      await refresh()
+      return data
+    },
+    [refresh],
+  )
+
+  // ---------- 寫入:任務 ----------
+  const toTaskRow = useCallback(
+    (input) => ({
+      title: input.title.trim(),
+      description: input.description?.trim() ?? '',
+      image_urls: input.image_urls ?? [],
+      category_id: input.category_id || null,
+      assigned_to: idOf(input.assigned_to),
+      reward_type: input.reward_type ?? 'points',
+      reward_points: input.reward_type === 'reward' ? 0 : Number(input.reward_points) || 0,
+      reward_id: input.reward_type === 'reward' ? input.reward_id || null : null,
+      due_date: input.due_date || null,
+      recurrence_rule: input.recurrence_rule ?? null,
+    }),
+    [idOf],
+  )
 
   const createTask = useCallback(
-    (input) => {
-      const t = nowIso()
-      const task = {
-        id: uid(),
-        title: input.title.trim(),
-        description: input.description?.trim() ?? '',
-        created_by: user,
-        assigned_to: input.assigned_to,
-        reward_points: Number(input.reward_points) || 0,
-        status: 'pending',
-        due_date: input.due_date || null,
-        recurrence_rule: input.recurrence_rule ?? null,
-        reject_reason: null,
-        created_at: t,
-        updated_at: t,
-      }
-      setData((d) => ({ ...d, tasks: [task, ...d.tasks] }))
-      return task
+    async (input) => {
+      const row = { ...toTaskRow(input), created_by: userId, status: 'pending' }
+      const { data, error } = await supabase.from('tasks').insert(row).select().single()
+      throwIf(error)
+      await refresh()
+      return data
     },
-    [user],
+    [toTaskRow, userId, refresh],
   )
 
-  const updateTask = useCallback((id, patch) => mutateTask(id, () => patch), [mutateTask])
-
-  const deleteTask = useCallback((id) => {
-    setData((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }))
-  }, [])
-
-  const submitTask = useCallback((id) => mutateTask(id, () => ({ status: 'submitted' })), [mutateTask])
-
-  const rejectTask = useCallback(
-    (id, reason) =>
-      mutateTask(id, () => ({ status: 'rejected', reject_reason: reason?.trim() || '未填寫原因' })),
-    [mutateTask],
+  const updateTask = useCallback(
+    async (id, input) => {
+      const { error } = await supabase.from('tasks').update(toTaskRow(input)).eq('id', id)
+      throwIf(error)
+      await refresh()
+    },
+    [toTaskRow, refresh],
   )
 
-  const approveTask = useCallback((id) => {
-    setData((d) => {
-      const task = d.tasks.find((t) => t.id === id)
-      if (!task || task.status !== 'submitted') return d
-      const t = nowIso()
-      const tasks = d.tasks.map((x) =>
-        x.id === id ? { ...x, status: 'approved', reject_reason: null, updated_at: t } : x,
-      )
-      const ledger = [
-        {
-          id: uid(),
-          user_id: task.assigned_to,
-          amount: task.reward_points,
-          reason: `任務完成:${task.title}`,
-          related_task_id: task.id,
-          related_redemption_id: null,
-          created_at: t,
-        },
-        ...d.ledger,
-      ]
-      // 重複任務:核准後才產生下一期
-      const rule = task.recurrence_rule
-      if (rule && rule.active !== false) {
-        tasks.unshift({
-          ...task,
-          id: uid(),
-          status: 'pending',
-          reject_reason: null,
-          due_date: nextDueDate(rule, task.due_date),
-          created_at: t,
-          updated_at: t,
-        })
-      }
-      return { ...d, tasks, ledger }
-    })
-  }, [])
-
-  const stopRecurrence = useCallback(
-    (id) =>
-      mutateTask(id, (t) => ({
-        recurrence_rule: t.recurrence_rule ? { ...t.recurrence_rule, active: false } : null,
-      })),
-    [mutateTask],
+  const deleteTask = useCallback(
+    async (id) => {
+      const task = tasksById[id]
+      const { error } = await supabase.from('tasks').delete().eq('id', id)
+      throwIf(error)
+      if (task?.image_urls?.length) deleteImages(task.image_urls).catch(() => {})
+      await refresh()
+    },
+    [tasksById, refresh],
   )
 
-  // ---- 積分 ----
-  const balanceOf = useCallback(
-    (userId) => data.ledger.filter((l) => l.user_id === userId).reduce((s, l) => s + l.amount, 0),
-    [data.ledger],
+  const submitTask = useCallback((id) => rpc('submit_task', { p_task_id: id }), [rpc])
+  const approveTask = useCallback((id) => rpc('approve_task', { p_task_id: id }), [rpc])
+  const rejectTask = useCallback((id, reason) => rpc('reject_task', { p_task_id: id, p_reason: reason ?? '' }), [rpc])
+  const stopRecurrence = useCallback((id) => rpc('stop_recurrence', { p_task_id: id }), [rpc])
+
+  // ---------- 寫入:獎勵與兌換 ----------
+  const toRewardRow = (input) => ({
+    name: input.name.trim(),
+    description: input.description?.trim() ?? '',
+    image_urls: input.image_urls ?? [],
+    category_id: input.category_id || null,
+    cost_points: Number(input.cost_points) || 0,
+    stock: input.unlimited ? -1 : Math.max(0, Number(input.stock) || 0),
+    is_active: input.is_active ?? true,
+  })
+
+  const createReward = useCallback(
+    async (input) => {
+      const { data, error } = await supabase.from('rewards').insert({ ...toRewardRow(input), created_by: userId }).select().single()
+      throwIf(error)
+      await refresh()
+      return data
+    },
+    [userId, refresh],
   )
 
-  const resetDemo = useCallback(() => setData(seed()), [])
+  const updateReward = useCallback(
+    async (id, input) => {
+      const { error } = await supabase.from('rewards').update(toRewardRow(input)).eq('id', id)
+      throwIf(error)
+      await refresh()
+    },
+    [refresh],
+  )
+
+  const requestRedemption = useCallback((rewardId) => rpc('request_redemption', { p_reward_id: rewardId }), [rpc])
+  const fulfillRedemption = useCallback((id) => rpc('fulfill_redemption', { p_redemption_id: id }), [rpc])
+  const rejectRedemption = useCallback(
+    (id, reason) => rpc('reject_redemption', { p_redemption_id: id, p_reason: reason ?? '' }),
+    [rpc],
+  )
+
+  // ---------- 寫入:類別 ----------
+  const createCategory = useCallback(
+    async ({ kind, name, emoji }) => {
+      const sort_order = categories.filter((c) => c.kind === kind).length
+      const { data, error } = await supabase
+        .from('categories')
+        .insert({ kind, name: name.trim(), emoji: emoji?.trim() || null, sort_order, created_by: userId })
+        .select()
+        .single()
+      throwIf(error)
+      await refresh()
+      return data
+    },
+    [categories, userId, refresh],
+  )
+
+  const updateCategory = useCallback(
+    async (id, { name, emoji }) => {
+      const { error } = await supabase.from('categories').update({ name: name.trim(), emoji: emoji?.trim() || null }).eq('id', id)
+      throwIf(error)
+      await refresh()
+    },
+    [refresh],
+  )
+
+  const deleteCategory = useCallback(
+    async (id) => {
+      const { error } = await supabase.from('categories').delete().eq('id', id)
+      throwIf(error)
+      await refresh()
+    },
+    [refresh],
+  )
 
   const value = useMemo(
     () => ({
+      configured: isConfigured,
+      authLoading: authUser === undefined,
+      authUser,
       user,
+      userId,
+      users,
+      ready,
+      fatal,
       login,
       logout,
-      tasks: data.tasks,
-      ledger: data.ledger,
+      refresh,
+      tasks,
+      ledger,
+      rewards,
+      redemptions,
+      categories,
+      balanceOf,
+      reservedOf,
       createTask,
       updateTask,
       deleteTask,
@@ -249,10 +373,22 @@ export function StoreProvider({ children }) {
       approveTask,
       rejectTask,
       stopRecurrence,
-      balanceOf,
-      resetDemo,
+      createReward,
+      updateReward,
+      requestRedemption,
+      fulfillRedemption,
+      rejectRedemption,
+      createCategory,
+      updateCategory,
+      deleteCategory,
     }),
-    [user, login, logout, data, createTask, updateTask, deleteTask, submitTask, approveTask, rejectTask, stopRecurrence, balanceOf, resetDemo],
+    [
+      authUser, user, userId, users, ready, fatal, login, logout, refresh,
+      tasks, ledger, rewards, redemptions, categories, balanceOf, reservedOf,
+      createTask, updateTask, deleteTask, submitTask, approveTask, rejectTask, stopRecurrence,
+      createReward, updateReward, requestRedemption, fulfillRedemption, rejectRedemption,
+      createCategory, updateCategory, deleteCategory,
+    ],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
