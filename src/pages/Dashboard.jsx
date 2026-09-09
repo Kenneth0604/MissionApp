@@ -7,7 +7,9 @@ export default function Dashboard() {
   const balance = balanceOf(user)
   const reserved = reservedOf(user)
 
-  const todo = tasks.filter((t) => isTodoFor(t, user))
+  // 待辦依優先程度(越急越前)再依期限排序
+  const byUrgency = (a, b) => (b.priority ?? 3) - (a.priority ?? 3) || (a.due_date || '9').localeCompare(b.due_date || '9')
+  const todo = tasks.filter((t) => isTodoFor(t, user)).sort(byUrgency)
   const toReview = tasks.filter((t) => isReviewer(t, user))
   const waitingOther = tasks.filter((t) => t.created_by === user && !t.shared && t.assigned_to !== user && (t.status === 'pending' || t.status === 'rejected'))
   const toFulfill = redemptions.filter((d) => d.status === 'requested' && d.requested_by !== user)

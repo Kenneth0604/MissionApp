@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import StatusBadge from './StatusBadge.jsx'
 import RewardTag from './RewardTag.jsx'
 import CategoryChip from './CategoryChip.jsx'
+import PriorityBadge from './PriorityBadge.jsx'
 import { describeRecurrence, formatDate, isOverdue } from '../lib/format.js'
 import { useStore } from '../lib/store.jsx'
 
@@ -23,6 +24,7 @@ export default function TaskCard({ task }) {
           <h3 className="truncate font-semibold text-ink">{task.title}</h3>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
             <span>{who}</span>
+            {task.status !== 'approved' && <PriorityBadge value={task.priority} />}
             <CategoryChip category={task.category} />
             {recurrence && <span className="text-accent">↻ {recurrence}</span>}
           </p>

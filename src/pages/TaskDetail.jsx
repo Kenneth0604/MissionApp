@@ -6,6 +6,7 @@ import StatusBadge from '../components/StatusBadge.jsx'
 import RewardTag from '../components/RewardTag.jsx'
 import ImageGallery from '../components/ImageGallery.jsx'
 import CategoryChip from '../components/CategoryChip.jsx'
+import PriorityBadge from '../components/PriorityBadge.jsx'
 import { describeRecurrence, formatDate, formatDateTime, isOverdue } from '../lib/format.js'
 
 export default function TaskDetail() {
@@ -78,6 +79,7 @@ export default function TaskDetail() {
           <Item label="建立者" value={nameOf(task.created_by)} />
           <Item label="指派給" value={task.shared ? '👥 共同任務' : nameOf(task.assigned_to)} />
           {task.completed_by && <Item label="完成者" value={nameOf(task.completed_by)} />}
+          <Item label="優先程度" value={<PriorityBadge value={task.priority} />} />
           <Item label="完成獎勵" value={<RewardTag task={task} size="lg" />} />
           <Item
             label="期限"

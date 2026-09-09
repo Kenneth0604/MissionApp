@@ -35,6 +35,7 @@ export default function Tasks() {
   const sorted = [...list].sort((a, b) => {
     if (tab === 'history') return b.updated_at.localeCompare(a.updated_at)
     if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
+    if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3) // 越急越前面
     if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
     if (a.due_date) return -1
     if (b.due_date) return 1

@@ -5,6 +5,7 @@ import { useToast } from '../lib/toast.jsx'
 import ImageUploader from '../components/ImageUploader.jsx'
 import CategoryPicker from '../components/CategoryPicker.jsx'
 import { mainsOf, matchesFilter, subsOf } from '../lib/categories.js'
+import { DEFAULT_PRIORITY, PRIORITIES } from '../lib/priority.js'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -36,6 +37,7 @@ export default function TaskForm() {
     description: editing?.description ?? '',
     image_urls: editing?.image_urls ?? [],
     category_id: editing?.category_id ?? '',
+    priority: editing?.priority ?? DEFAULT_PRIORITY,
     assigned_to: editing ? (editing.shared ? 'both' : editing.assigned_to) : otherUser(user),
     reward_type: editing?.reward_type ?? 'points',
     reward_points: editing?.reward_points ?? 10,
@@ -97,6 +99,21 @@ export default function TaskForm() {
 
       <Field label="類別">
         <CategoryPicker kind="task" value={form.category_id} onChange={(v) => patch({ category_id: v })} />
+      </Field>
+
+      <Field label="優先程度">
+        <div className="flex flex-wrap gap-2">
+          {PRIORITIES.map((p) => (
+            <button
+              type="button"
+              key={p.value}
+              onClick={() => patch({ priority: p.value })}
+              className={`chip py-2 ${form.priority === p.value ? 'chip-active' : p.cls}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
       </Field>
 
       <Field label="說明(選填)">
