@@ -1,16 +1,18 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { isReviewer, isTodoFor, useStore } from '../lib/store.jsx'
+import { isDaily, isReviewer, isTodoFor, useStore } from '../lib/store.jsx'
 
 export default function Layout() {
   const { user, nameOf, tasks, redemptions } = useStore()
 
-  const todo = tasks.filter((t) => isTodoFor(t, user)).length
-  const review = tasks.filter((t) => isReviewer(t, user)).length
+  const todo = tasks.filter((t) => !isDaily(t) && isTodoFor(t, user)).length
+  const review = tasks.filter((t) => !isDaily(t) && isReviewer(t, user)).length
+  const dailyBadge = tasks.filter((t) => isDaily(t) && (isTodoFor(t, user) || isReviewer(t, user))).length
   const pendingRedemptions = redemptions.filter((d) => d.status === 'requested' && d.requested_by !== user).length
 
   const nav = [
     { to: '/', label: '首頁', icon: HomeIcon, end: true },
     { to: '/tasks', label: '任務', icon: TaskIcon, badge: todo + review },
+    { to: '/daily', label: '每日', icon: CalendarIcon, badge: dailyBadge },
     { to: '/rewards', label: '獎勵', icon: GiftIcon },
     { to: '/redemptions', label: '兌換', icon: BagIcon, badge: pendingRedemptions },
     { to: '/settings', label: '設定', icon: GearIcon },
@@ -31,7 +33,7 @@ export default function Layout() {
 
       {/* 一般 flex 子元素而非 fixed:iOS 主畫面 App 對 fixed+bottom:0 的高度計算會留縫 */}
       <nav className="pb-safe z-10 shrink-0 border-t border-line bg-surface">
-        <div className="mx-auto grid max-w-md grid-cols-5">
+        <div className="mx-auto grid max-w-md grid-cols-6">
           {nav.map(({ to, label, icon: Icon, end, badge }) => (
             <NavLink
               key={to}
@@ -69,6 +71,15 @@ function TaskIcon({ className }) {
   return (
     <svg className={className} {...svgProps}>
       <path d="M9 5h6M9 3h6a1 1 0 011 1v1H8V4a1 1 0 011-1zM6 5h12a1 1 0 011 1v14a1 1 0 01-1 1H6a1 1 0 01-1-1V6a1 1 0 011-1zM9 12l2 2 4-4" />
+    </svg>
+  )
+}
+function CalendarIcon({ className }) {
+  return (
+    <svg className={className} {...svgProps}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+      <path d="M8 14h2M14 14h2M8 17h2" />
     </svg>
   )
 }

@@ -32,11 +32,16 @@ export const otherUser = (code) => (code === 'A' ? 'B' : 'A')
 /** 這筆任務是否在 code 的待辦清單(被指派給我,或是共同任務) */
 export const isTodoFor = (t, code) =>
   (t.shared || t.assigned_to === code) && (t.status === 'pending' || t.status === 'rejected')
-/** code 是否為這筆任務目前的審核者(共同任務 = 非完成者;一般任務 = 建立者) */
-export const isReviewer = (t, code) =>
-  t.status === 'submitted' && (t.shared ? t.completed_by !== code : t.created_by === code)
-/** 一般任務的審核者是建立者;共同任務則是「不是完成者的那個人」 */
-export const reviewerOf = (t) => (t.shared ? (t.completed_by ? otherUser(t.completed_by) : null) : t.created_by)
+/** code 是否為這筆任務目前的審核者:一律是「完成者以外的那個人」 */
+export const isReviewer = (t, code) => t.status === 'submitted' && t.completed_by !== code
+/** 審核者(完成前無意義):完成者以外的那個人 */
+export const reviewerOf = (t) => (t.completed_by ? otherUser(t.completed_by) : null)
+/** 是否為「每日任務」區的週期性任務(有重複規則) */
+export const isDaily = (t) => Boolean(t.recurrence_rule)
+/** 我是否可以「幫對方完成」這個任務(不是原本的被指派者,任務未完成、非共同任務) */
+export const canHelp = (t, code) => !t.shared && t.assigned_to && t.assigned_to !== code && (t.status === 'pending' || t.status === 'rejected')
+/** 這筆任務是否是被「幫忙」完成的(完成者不是原本的被指派者)→ 積分獎勵會加倍 */
+export const isHelped = (t) => !t.shared && Boolean(t.assigned_to) && Boolean(t.completed_by) && t.completed_by !== t.assigned_to
 
 const StoreContext = createContext(null)
 const WATCHED_TABLES = ['tasks', 'points_ledger', 'rewards', 'redemptions', 'categories']
@@ -207,6 +212,7 @@ export function StoreProvider({ children }) {
         priority: t.priority ?? 3,
         completed_by: t.completed_by ? codeOf(t.completed_by) : null,
         image_urls: t.image_urls ?? [],
+        choices: t.choices ?? [],
         reward: t.reward_id ? rewardsById[t.reward_id] ?? null : null,
         category: t.category_id ? categoriesById[t.category_id] ?? null : null,
       })),
@@ -257,6 +263,12 @@ export function StoreProvider({ children }) {
   )
 
   // ---------- 寫入:任務 ----------
+  /** 選項清單:去除空白、空字串,沒有選項就回 null(對應資料庫欄位) */
+  const normalizeChoices = (arr) => {
+    const list = (arr ?? []).map((s) => String(s).trim()).filter(Boolean)
+    return list.length ? list : null
+  }
+
   const toTaskRow = useCallback(
     (input) => {
       const row = {
@@ -265,6 +277,7 @@ export function StoreProvider({ children }) {
         image_urls: input.image_urls ?? [],
         category_id: input.category_id || null,
         priority: Math.min(5, Math.max(1, Number(input.priority) || 3)),
+        choices: normalizeChoices(input.choices),
         assigned_to: input.assigned_to === 'both' ? null : idOf(input.assigned_to),
         shared: input.assigned_to === 'both',
         reward_type: input.reward_type ?? 'points',
@@ -284,6 +297,7 @@ export function StoreProvider({ children }) {
             image_urls: row.image_urls,
             category_id: row.category_id,
             priority: row.priority,
+            choices: row.choices,
             reward_type: row.reward_type,
             reward_points: row.reward_points,
             reward_id: row.reward_id,
@@ -338,7 +352,7 @@ export function StoreProvider({ children }) {
     [tasksById, refresh],
   )
 
-  const submitTask = useCallback((id) => rpc('submit_task', { p_task_id: id }), [rpc])
+  const submitTask = useCallback((id, choice) => rpc('submit_task', { p_task_id: id, p_choice: choice ?? null }), [rpc])
   const approveTask = useCallback((id) => rpc('approve_task', { p_task_id: id }), [rpc])
   const rejectTask = useCallback((id, reason) => rpc('reject_task', { p_task_id: id, p_reason: reason ?? '' }), [rpc])
   const stopRecurrence = useCallback((id) => rpc('stop_recurrence', { p_task_id: id }), [rpc])

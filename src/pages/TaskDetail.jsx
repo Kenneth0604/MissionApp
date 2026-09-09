@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { isReviewer, reviewerOf, useStore } from '../lib/store.jsx'
+import { canHelp, isHelped, isReviewer, reviewerOf, useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import RewardTag from '../components/RewardTag.jsx'
@@ -18,17 +18,22 @@ export default function TaskDetail() {
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [choice, setChoice] = useState('')
 
   if (!task) return <p className="text-muted">找不到這個任務(可能已被刪除)</p>
 
   const isAssignee = task.shared || task.assigned_to === user
   const isCreator = task.created_by === user
   const canSubmit = isAssignee && (task.status === 'pending' || task.status === 'rejected')
+  const canHelpOut = canHelp(task, user)
+  const needsChoice = (canSubmit || canHelpOut) && task.choices?.length > 0
   const canReview = isReviewer(task, user)
   const reviewer = reviewerOf(task)
   const canEdit = isCreator && task.status === 'pending'
   const recurrence = describeRecurrence(task.recurrence_rule)
   const recurrenceActive = task.recurrence_rule && task.recurrence_rule.active !== false
+  const helped = isHelped(task)
+  const doubled = helped && task.reward_type === 'points'
 
   async function run(fn, okMsg) {
     setBusy(true)
@@ -46,6 +51,11 @@ export default function TaskDetail() {
     run(() => rejectTask(task.id, reason), '已退回')
     setRejecting(false)
     setReason('')
+  }
+
+  function onSubmit() {
+    if (needsChoice && !choice) return toast.error('請選一個選項')
+    run(() => submitTask(task.id, choice || undefined), '已送出,等待審核')
   }
 
   function onDelete() {
@@ -79,8 +89,17 @@ export default function TaskDetail() {
           <Item label="建立者" value={nameOf(task.created_by)} />
           <Item label="指派給" value={task.shared ? '👥 共同任務' : nameOf(task.assigned_to)} />
           {task.completed_by && <Item label="完成者" value={nameOf(task.completed_by)} />}
+          {task.chosen_choice && <Item label="這次選的" value={task.chosen_choice} />}
           <Item label="優先程度" value={<PriorityBadge value={task.priority} />} />
-          <Item label="完成獎勵" value={<RewardTag task={task} size="lg" />} />
+          <Item
+            label="完成獎勵"
+            value={
+              <span className="flex items-center gap-1.5">
+                <RewardTag task={task} size="lg" />
+                {doubled && <span className="rounded-full bg-warning-soft px-1.5 py-0.5 text-xs font-bold text-warning">×2 幫忙</span>}
+              </span>
+            }
+          />
           <Item
             label="期限"
             value={
@@ -108,11 +127,35 @@ export default function TaskDetail() {
             已核准,獎勵「{task.reward?.name}」已列入 <Link to="/redemptions" className="underline">兌換管理</Link> 待交付。
           </div>
         )}
+        {canHelpOut && (
+          <div className="mt-4 rounded-xl bg-warning-soft p-3 text-sm text-warning">
+            這本來是 {nameOf(task.assigned_to)} 的任務。你可以幫忙完成,{task.reward_type === 'points' ? '積分獎勵會加倍發放給你' : '完成獎勵會發給你'}。
+          </div>
+        )}
       </section>
 
+      {needsChoice && (canSubmit || canHelpOut) && (
+        <div className="card space-y-2 p-4">
+          <p className="label">選一個做了的</p>
+          <div className="flex flex-wrap gap-2">
+            {task.choices.map((c) => (
+              <button key={c} type="button" onClick={() => setChoice(c)} className={`chip py-2 ${choice === c ? 'chip-active' : ''}`}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {canSubmit && (
-        <button onClick={() => run(() => submitTask(task.id), '已送出,等待審核')} disabled={busy} className="btn-success w-full py-3.5 text-lg">
-          ✓ 標記完成
+        <button onClick={onSubmit} disabled={busy || (needsChoice && !choice)} className="btn-success w-full py-3.5 text-lg">
+          ✓ 標記完成{choice && ` · ${choice}`}
+        </button>
+      )}
+
+      {!canSubmit && canHelpOut && (
+        <button onClick={onSubmit} disabled={busy || (needsChoice && !choice)} className="w-full rounded-2xl bg-warning py-3.5 text-lg font-semibold text-white disabled:opacity-40">
+          🤝 幫忙完成(雙倍獎勵){choice && ` · ${choice}`}
         </button>
       )}
 
@@ -120,7 +163,7 @@ export default function TaskDetail() {
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setRejecting(true)} disabled={busy} className="btn-danger-outline py-3.5">退回重做</button>
           <button onClick={() => run(() => approveTask(task.id), '已核准')} disabled={busy} className="btn-success py-3.5">
-            核准{task.reward_type === 'points' ? ` +${task.reward_points}` : task.reward_type === 'reward' ? ` · ${task.reward?.name ?? '獎勵'}` : ''}
+            核准{task.reward_type === 'points' ? ` +${doubled ? task.reward_points * 2 : task.reward_points}` : task.reward_type === 'reward' ? ` · ${task.reward?.name ?? '獎勵'}` : ''}
           </button>
         </div>
       )}
@@ -139,7 +182,7 @@ export default function TaskDetail() {
         <div className="flex flex-wrap gap-2 text-sm">
           {canEdit && (
             <>
-              <Link to={`/tasks/${task.id}/edit`} className="chip">編輯</Link>
+              <Link to={task.recurrence_rule ? `/daily/${task.id}/edit` : `/tasks/${task.id}/edit`} className="chip">編輯</Link>
               <button onClick={onDelete} disabled={busy} className="chip text-danger">刪除</button>
             </>
           )}

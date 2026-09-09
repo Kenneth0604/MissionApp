@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard.jsx'
 import Tasks from './pages/Tasks.jsx'
 import TaskForm from './pages/TaskForm.jsx'
 import TaskDetail from './pages/TaskDetail.jsx'
+import DailyTasks from './pages/DailyTasks.jsx'
+import DailyTaskForm from './pages/DailyTaskForm.jsx'
 import Points from './pages/Points.jsx'
 import Rewards from './pages/Rewards.jsx'
 import RewardForm from './pages/RewardForm.jsx'
@@ -39,6 +41,9 @@ export default function App() {
         <Route path="tasks/new" element={<TaskForm />} />
         <Route path="tasks/:id" element={<TaskDetail />} />
         <Route path="tasks/:id/edit" element={<TaskForm />} />
+        <Route path="daily" element={<DailyTasks />} />
+        <Route path="daily/new" element={<DailyTaskForm />} />
+        <Route path="daily/:id/edit" element={<DailyTaskForm />} />
         <Route path="points" element={<Points />} />
         <Route path="rewards" element={<Rewards />} />
         <Route path="rewards/new" element={<RewardForm />} />

@@ -11,24 +11,22 @@ const TABS = [
   { key: 'history', label: '歷史' },
 ]
 
-export default function Tasks() {
+/** 每日任務區:每天 / 每週重複的任務,獨立於一般任務列表 */
+export default function DailyTasks() {
   const { user, tasks, categoriesById } = useStore()
   const [params, setParams] = useSearchParams()
   const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'mine'
   const [category, setCategory] = useState('')
 
-  // 週期性(每日 / 每週)任務改在「每日任務」區管理與顯示
   const list = tasks.filter((t) => {
-    if (isDaily(t)) return false
+    if (!isDaily(t)) return false
     if (!matchesFilter(t, category, categoriesById)) return false
     if (tab === 'history') return t.status === 'approved'
     if (t.status === 'approved') return false
     if (tab === 'mine') {
-      // 我要完成的:指派給我、或共同任務(還沒被對方完成送審的)
       if (t.shared) return t.status !== 'submitted' || t.completed_by === user
       return t.assigned_to === user
     }
-    // 我派出的 / 待我審核的
     if (t.shared) return isReviewer(t, user)
     return t.created_by === user
   })
@@ -37,15 +35,15 @@ export default function Tasks() {
   const sorted = [...list].sort((a, b) => {
     if (tab === 'history') return b.updated_at.localeCompare(a.updated_at)
     if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
-    if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3) // 越急越前面
-    if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
-    if (a.due_date) return -1
-    if (b.due_date) return 1
+    if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3)
     return b.updated_at.localeCompare(a.updated_at)
   })
 
   return (
     <div className="space-y-4">
+      <h1 className="text-xl font-bold text-ink">📅 每日任務</h1>
+      <p className="text-sm text-muted">每天 / 每週重複的習慣,例如練樂器、看書或運動。</p>
+
       <div className="flex rounded-2xl bg-surface-2 p-1">
         {TABS.map((t) => (
           <button
@@ -60,19 +58,17 @@ export default function Tasks() {
 
       <CategoryFilter kind="task" value={category} onChange={setCategory} />
 
-      <p className="text-center text-xs text-muted">
-        每天 / 每週重複的任務在「<Link to="/daily" className="text-primary underline">每日任務</Link>」區。
-      </p>
-
       {sorted.length === 0 ? (
-        <p className="empty py-8">這裡沒有任務</p>
+        <p className="empty py-8">
+          還沒有每日任務,<Link to="/daily/new" className="text-primary underline">新增第一個</Link>吧。
+        </p>
       ) : (
         <div className="space-y-2">{sorted.map((t) => <TaskCard key={t.id} task={t} />)}</div>
       )}
 
       <Link
-        to="/tasks/new"
-        aria-label="新任務"
+        to="/daily/new"
+        aria-label="新增每日任務"
         className="fixed right-5 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] flex h-14 w-14 items-center justify-center rounded-full bg-primary text-3xl leading-none text-primary-fg shadow-lg active:scale-95"
       >
         ＋

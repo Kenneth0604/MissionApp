@@ -6,20 +6,24 @@ import ImageUploader from '../components/ImageUploader.jsx'
 import CategoryPicker from '../components/CategoryPicker.jsx'
 import { mainsOf, matchesFilter, subsOf } from '../lib/categories.js'
 import { DEFAULT_PRIORITY, PRIORITIES } from '../lib/priority.js'
+import { appTodayISO } from '../lib/format.js'
 
-/** 一般(單次)任務的建立 / 編輯表單。重複性任務改用「每日任務」區(DailyTaskForm)。 */
-export default function TaskForm() {
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
+
+/** 每日任務區的建立 / 編輯表單:專門給重複性任務用(freq 一定是 daily / weekly) */
+export default function DailyTaskForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, nameOf, tasks, rewards, categories, categoriesById, createTask, updateTask } = useStore()
+  const { user, nameOf, tasks, rewards, categories, categoriesById, createTask, updateTask, updateSeries } = useStore()
   const editing = id ? tasks.find((t) => t.id === id) : null
 
-  // 誤入一般任務編輯連結但其實是每日任務:導去每日任務表單
-  if (editing?.recurrence_rule) return <Navigate to={`/daily/${editing.id}/edit`} replace />
+  // 誤入一般任務的編輯連結:導去一般任務表單
+  if (editing && !editing.recurrence_rule) return <Navigate to={`/tasks/${editing.id}/edit`} replace />
 
+  const isSeries = Boolean(editing)
+  const [scope, setScope] = useState('one')
   const activeRewards = rewards.filter((r) => r.is_active && r.stock !== 0)
-  // 指定獎勵:主類別 → 次類別(可略)→ 獎勵。只列出有可用獎勵的類別;沒分類的獎勵歸在「未分類」
   const rewardMains = [
     ...mainsOf(categories, 'reward').filter((c) => activeRewards.some((r) => matchesFilter(r, c.id, categoriesById))),
     ...(activeRewards.some((r) => !r.category_id) ? [{ id: 'none', name: '未分類' }] : []),
@@ -41,22 +45,35 @@ export default function TaskForm() {
     image_urls: editing?.image_urls ?? [],
     category_id: editing?.category_id ?? '',
     priority: editing?.priority ?? DEFAULT_PRIORITY,
+    choices: editing?.choices ?? [],
     assigned_to: editing ? (editing.shared ? 'both' : editing.assigned_to) : otherUser(user),
     reward_type: editing?.reward_type ?? 'points',
     reward_points: editing?.reward_points ?? 10,
     reward_id: editing?.reward_id ?? '',
     due_date: editing?.due_date ?? '',
+    freq: editing?.recurrence_rule?.freq ?? 'daily',
+    day_of_week: editing?.recurrence_rule?.day_of_week ?? new Date().getDay(),
+    expire_on_miss: editing?.recurrence_rule?.expire_on_miss ?? false,
   }))
+  const [choiceInput, setChoiceInput] = useState('')
   const [busy, setBusy] = useState(false)
 
-  if (id && !editing) return <p className="text-muted">找不到這個任務</p>
-  if (editing && (editing.created_by !== user || editing.status !== 'pending')) {
-    // 只有建立者能在待完成狀態編輯
-    return <p className="text-muted">只有建立者能在「待完成」狀態下編輯任務</p>
-  }
+  if (id && !editing) return <p className="text-muted">找不到這個每日任務</p>
+  if (editing && editing.created_by !== user) return <p className="text-muted">只有建立者能編輯這個系列</p>
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
   const patch = (obj) => setForm((f) => ({ ...f, ...obj }))
+
+  function addChoice() {
+    const v = choiceInput.trim()
+    if (!v) return
+    if (form.choices.includes(v)) return toast.error('這個選項已經有了')
+    patch({ choices: [...form.choices, v] })
+    setChoiceInput('')
+  }
+  function removeChoice(v) {
+    patch({ choices: form.choices.filter((c) => c !== v) })
+  }
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -64,16 +81,30 @@ export default function TaskForm() {
     if (form.reward_type === 'points' && Number(form.reward_points) < 0) return toast.error('積分不能是負數')
     if (form.reward_type === 'reward' && !form.reward_id) return toast.error('請選擇一個獎勵')
 
-    const payload = { ...form, recurrence_rule: null, reward_points: Number(form.reward_points), reward_id: form.reward_id || null, due_date: form.due_date || null }
+    const recurrence_rule = {
+      freq: form.freq,
+      ...(form.freq === 'weekly' ? { day_of_week: Number(form.day_of_week) } : {}),
+      active: true,
+      expire_on_miss: Boolean(form.expire_on_miss),
+    }
+    // 過期即丟一定要有期限才知道哪一期算過期;沒填就用 App 的「今天」(凌晨 3 點換日)
+    const due_date = form.due_date || (recurrence_rule.expire_on_miss ? appTodayISO() : null)
+    const payload = { ...form, recurrence_rule, reward_points: Number(form.reward_points), reward_id: form.reward_id || null, due_date }
 
     setBusy(true)
     try {
-      if (editing) {
-        await updateTask(editing.id, payload)
+      if (editing && scope === 'one') {
+        // 只改這一期:規則(含系列範本)原樣保留,之後的期別不受影響
+        await updateTask(editing.id, { ...payload, recurrence_rule: editing.recurrence_rule })
+        toast.success('已更新這一期')
+        navigate(`/tasks/${editing.id}`, { replace: true })
+      } else if (editing) {
+        const n = await updateSeries(editing.id, payload)
+        toast.success(`已更新整個系列(${n} 期)`)
         navigate(`/tasks/${editing.id}`, { replace: true })
       } else {
         const t = await createTask(payload)
-        toast.success('任務已建立')
+        toast.success('每日任務已建立')
         navigate(`/tasks/${t.id}`, { replace: true })
       }
     } catch (err) {
@@ -85,10 +116,29 @@ export default function TaskForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
-      <h2 className="text-xl font-bold text-ink">{editing ? '編輯任務' : '新任務'}</h2>
+      <h2 className="text-xl font-bold text-ink">📅 {editing ? '編輯每日任務' : '新增每日任務'}</h2>
+
+      {isSeries && (
+        <div className="rounded-2xl bg-surface-2 p-3">
+          <p className="mb-2 text-xs font-medium text-muted">要改哪個範圍?</p>
+          <div className="flex rounded-xl bg-surface p-1">
+            <button type="button" onClick={() => setScope('one')} className={`flex-1 rounded-lg py-2 text-sm font-medium ${scope === 'one' ? 'bg-primary text-primary-fg shadow-sm' : 'text-muted'}`}>
+              只改這一期
+            </button>
+            <button type="button" onClick={() => setScope('series')} className={`flex-1 rounded-lg py-2 text-sm font-medium ${scope === 'series' ? 'bg-primary text-primary-fg shadow-sm' : 'text-muted'}`}>
+              改整個系列
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {scope === 'one'
+              ? '例如今天改成「練吉他」:只有這一期會變,明天的新一期仍照系列原本的內容。'
+              : '會更新所有還沒完成的期別,之後產生的每一期也都用新的內容與重複設定。'}
+          </p>
+        </div>
+      )}
 
       <Field label="標題">
-        <input value={form.title} onChange={set('title')} placeholder="例如:倒垃圾" className="input" autoFocus={!editing} />
+        <input value={form.title} onChange={set('title')} placeholder="例如:練樂器" className="input" autoFocus={!editing} />
       </Field>
 
       <Field label="類別">
@@ -116,6 +166,32 @@ export default function TaskForm() {
 
       <Field label="圖片(選填)">
         <ImageUploader folder="tasks" value={form.image_urls} onChange={(urls) => patch({ image_urls: urls })} />
+      </Field>
+
+      <Field label="多選項(選填)">
+        <div className="flex flex-wrap gap-2">
+          {form.choices.map((c) => (
+            <span key={c} className="chip gap-1.5 py-1.5 pr-1.5">
+              {c}
+              <button type="button" aria-label="移除" onClick={() => removeChoice(c)} className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-2 text-[10px] text-muted">✕</button>
+            </span>
+          ))}
+        </div>
+        <div className="mt-2 flex gap-2">
+          <input
+            value={choiceInput}
+            onChange={(e) => setChoiceInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChoice() } }}
+            placeholder="例如:看書、運動"
+            className="input flex-1"
+          />
+          <button type="button" onClick={addChoice} className="btn-secondary shrink-0 px-4 text-sm">＋ 加入</button>
+        </div>
+        <p className="mt-1.5 text-xs text-muted">
+          {form.choices.length > 0
+            ? '標記完成時要選其中一個做了的,例如「看書」或「運動」選一個。'
+            : '不填的話就是單純的每日任務,標記完成時不需要選項。'}
+        </p>
       </Field>
 
       <Field label="指派給">
@@ -213,15 +289,52 @@ export default function TaskForm() {
         <input type="date" value={form.due_date} onChange={set('due_date')} className="input" />
       </Field>
 
-      {!editing && (
-        <p className="text-center text-xs text-muted">
-          需要每天 / 每週重複的任務,請到「<Link to="/daily/new" className="text-primary underline">每日任務</Link>」區新增。
-        </p>
+      {isSeries && scope === 'one' ? (
+        <Field label="重複">
+          <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-sm text-muted">要改重複設定請切換到「改整個系列」</p>
+        </Field>
+      ) : (
+        <Field label="重複">
+          <div className="flex gap-2">
+            {[['daily', '每天'], ['weekly', '每週']].map(([k, label]) => (
+              <button type="button" key={k} onClick={() => patch({ freq: k })} className={`chip flex-1 ${form.freq === k ? 'chip-active' : ''}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {form.freq === 'weekly' && (
+            <div className="mt-2 grid grid-cols-7 gap-1">
+              {WEEKDAYS.map((d, i) => (
+                <button
+                  type="button"
+                  key={i}
+                  onClick={() => patch({ day_of_week: i })}
+                  className={`rounded-lg py-2 text-sm ring-1 ${Number(form.day_of_week) === i ? 'bg-primary-soft text-primary ring-primary/40' : 'bg-surface text-muted ring-line'}`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 rounded-xl bg-surface-2 p-3">
+            <label className="flex items-start gap-2 text-sm text-ink">
+              <input type="checkbox" checked={form.expire_on_miss} onChange={(e) => patch({ expire_on_miss: e.target.checked })} className="mt-0.5 accent-primary" />
+              <span>
+                <span className="font-medium">過期即丟</span>
+                <span className="mt-0.5 block text-xs text-muted">
+                  每天凌晨 3 點結算:到期沒完成的那一期會直接消失並換成新的一期;有完成的照常記進歷史。適合「練樂器」這類每天都要重來的習慣。
+                </span>
+              </span>
+            </label>
+            {!form.expire_on_miss && <p className="mt-2 text-xs text-muted">未勾選時:審核通過後才會產生下一期,沒做完的會一直留著。</p>}
+            {form.expire_on_miss && !form.due_date && <p className="mt-2 text-xs text-muted">沒填期限的話,第一期的期限會自動設為今天。</p>}
+          </div>
+        </Field>
       )}
 
       <div className="flex gap-3 pt-2">
         <button type="button" onClick={() => navigate(-1)} className="btn-secondary flex-1">取消</button>
-        <button type="submit" disabled={busy} className="btn-primary flex-1">{busy ? '儲存中…' : editing ? '儲存' : '建立任務'}</button>
+        <button type="submit" disabled={busy} className="btn-primary flex-1">{busy ? '儲存中…' : editing ? '儲存' : '建立每日任務'}</button>
       </div>
     </form>
   )

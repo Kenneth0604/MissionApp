@@ -4,11 +4,12 @@ import RewardTag from './RewardTag.jsx'
 import CategoryChip from './CategoryChip.jsx'
 import PriorityBadge from './PriorityBadge.jsx'
 import { describeRecurrence, formatDate, isOverdue } from '../lib/format.js'
-import { useStore } from '../lib/store.jsx'
+import { isHelped, useStore } from '../lib/store.jsx'
 
 export default function TaskCard({ task }) {
   const { user, nameOf } = useStore()
   const mine = task.assigned_to === user
+  const helped = isHelped(task)
   const who = task.shared
     ? `👥 共同任務${task.completed_by ? ` · ${nameOf(task.completed_by)} 完成` : ''}`
     : mine ? `${nameOf(task.created_by)} 派給我` : `我派給 ${nameOf(task.assigned_to)}`
@@ -24,6 +25,8 @@ export default function TaskCard({ task }) {
           <h3 className="truncate font-semibold text-ink">{task.title}</h3>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
             <span>{who}</span>
+            {helped && <span className="font-medium text-warning">🤝 {nameOf(task.completed_by)} 幫忙(×2)</span>}
+            {task.chosen_choice && <span className="text-info">✓ {task.chosen_choice}</span>}
             {task.status !== 'approved' && <PriorityBadge value={task.priority} />}
             <CategoryChip category={task.category} />
             {recurrence && <span className="text-accent">↻ {recurrence}</span>}
