@@ -2,7 +2,7 @@ export default function Splash({ error, onRetry, onLogout }) {
   return (
     <div className="pt-safe pb-safe mx-auto flex min-h-full max-w-md flex-col items-center justify-center px-6 text-center">
       <div className="hero mb-4 flex h-20 w-20 items-center justify-center rounded-3xl text-4xl shadow-lg">🎯</div>
-      <h1 className="text-xl font-bold text-ink">MissionApp</h1>
+      <h1 className="text-xl font-bold text-ink">發任務用ㄉ東西</h1>
       {error ? (
         <>
           <p className="mt-3 rounded-2xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>

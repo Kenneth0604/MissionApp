@@ -84,9 +84,9 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {}
   } catch {
-    data = { title: 'MissionApp', body: event.data ? event.data.text() : '' }
+    data = { title: '發任務用ㄉ東西', body: event.data ? event.data.text() : '' }
   }
-  const title = data.title || 'MissionApp'
+  const title = data.title || '發任務用ㄉ東西'
   const options = {
     body: data.body || '',
     icon: `${BASE}icons/icon-192.png`,

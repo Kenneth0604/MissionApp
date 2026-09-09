@@ -76,14 +76,14 @@ export default function Settings() {
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted">
                 <li>在 Safari 點下方「分享」按鈕 <span aria-hidden>⎋</span></li>
                 <li>選「加入主畫面」並確認</li>
-                <li>從主畫面開啟 MissionApp,再回到這裡開啟通知</li>
+                <li>從主畫面開啟 發任務用ㄉ東西,再回到這裡開啟通知</li>
               </ol>
               <p className="mt-2 text-xs text-muted">需 iOS 16.4 以上。一般 Safari 分頁無法接收推播。</p>
             </div>
           ) : !env.supported ? (
             <p className="text-sm text-muted">此瀏覽器不支援 Web Push。</p>
           ) : env.permission === 'denied' ? (
-            <p className="text-sm text-danger">通知權限已被拒絕,請到系統設定 → 通知 → MissionApp 重新允許。</p>
+            <p className="text-sm text-danger">通知權限已被拒絕,請到系統設定 → 通知 → 發任務用ㄉ東西 重新允許。</p>
           ) : (
             <>
               <p className="text-sm text-ink">
@@ -108,7 +108,7 @@ export default function Settings() {
         </div>
       </section>
 
-      <p className="text-center text-xs text-muted">MissionApp · 僅供兩人私人使用</p>
+      <p className="text-center text-xs text-muted">發任務用ㄉ東西 · 僅供兩人私人使用</p>
     </div>
   )
 }

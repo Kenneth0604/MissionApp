@@ -20,7 +20,7 @@ export default function Layout() {
     <div className="mx-auto flex h-full max-w-md flex-col bg-bg">
       <header className="pt-safe hero sticky top-0 z-10 text-white shadow">
         <div className="flex items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-bold tracking-wide">MissionApp</h1>
+          <h1 className="text-lg font-bold tracking-wide">發任務用ㄉ東西</h1>
           <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium">{nameOf(user)}</span>
         </div>
       </header>

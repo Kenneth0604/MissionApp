@@ -44,7 +44,7 @@ export default function Login() {
     <div className="pt-safe pb-safe mx-auto flex min-h-full max-w-md flex-col justify-center px-6">
       <div className="mb-10 text-center">
         <div className="hero mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl text-4xl shadow-lg">🎯</div>
-        <h1 className="text-2xl font-bold text-ink">MissionApp</h1>
+        <h1 className="text-2xl font-bold text-ink">發任務用ㄉ東西</h1>
         <p className="mt-1 text-sm text-muted">雙人任務與獎勵管理</p>
       </div>
 
