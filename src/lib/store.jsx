@@ -52,6 +52,7 @@ export function StoreProvider({ children }) {
   const [raw, setRaw] = useState(EMPTY)
   const [ready, setReady] = useState(false)
   const [fatal, setFatal] = useState(null)
+  const [attempt, setAttempt] = useState(0) // 載入失敗後「重試」用
   const refreshTimer = useRef(null)
 
   // ---------- Auth ----------
@@ -77,6 +78,12 @@ export function StoreProvider({ children }) {
     setRaw(EMPTY)
     setFatal(null)
     await supabase?.auth.signOut()
+  }, [])
+
+  /** 載入失敗(例如離線)時重試,不登出、不清 session */
+  const retry = useCallback(() => {
+    setFatal(null)
+    setAttempt((n) => n + 1)
   }, [])
 
   // ---------- 讀取 ----------
@@ -116,7 +123,10 @@ export function StoreProvider({ children }) {
         await refresh()
         if (!cancelled) setReady(true)
       } catch (e) {
-        if (!cancelled) setFatal(e.message || '載入資料失敗')
+        if (!cancelled) {
+          const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+          setFatal(offline ? '目前離線,連上網路後請重試。' : `載入資料失敗:${e.message || '未知錯誤'}`)
+        }
       }
     })()
 
@@ -139,7 +149,7 @@ export function StoreProvider({ children }) {
       window.removeEventListener('focus', onVisible)
       supabase.removeChannel(channel)
     }
-  }, [authUser, refresh, scheduleRefresh])
+  }, [authUser, refresh, scheduleRefresh, attempt])
 
   // ---------- 對照與正規化 ----------
   const me = users.find((u) => u.id === authUser?.id) ?? null
@@ -364,6 +374,7 @@ export function StoreProvider({ children }) {
       fatal,
       login,
       logout,
+      retry,
       refresh,
       tasks,
       ledger,
@@ -389,7 +400,7 @@ export function StoreProvider({ children }) {
       deleteCategory,
     }),
     [
-      authUser, user, userId, users, nameOf, ready, fatal, login, logout, refresh,
+      authUser, user, userId, users, nameOf, ready, fatal, login, logout, retry, refresh,
       tasks, ledger, rewards, redemptions, categories, balanceOf, reservedOf,
       createTask, updateTask, deleteTask, submitTask, approveTask, rejectTask, stopRecurrence,
       createReward, updateReward, requestRedemption, fulfillRedemption, rejectRedemption,

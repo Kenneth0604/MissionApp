@@ -3,10 +3,21 @@ import { useStore } from '../lib/store.jsx'
 import { USERS } from '../lib/supabase.js'
 
 const CODES = ['A', 'B']
+const LAST_KEY = 'missionapp:last-user'
+
+function readLast() {
+  try {
+    const v = localStorage.getItem(LAST_KEY)
+    return CODES.includes(v) ? v : null
+  } catch {
+    return null
+  }
+}
 
 export default function Login() {
   const { login } = useStore()
-  const [who, setWho] = useState(null)
+  // 記住上次登入的身分,下次直接停在密碼欄
+  const [who, setWho] = useState(readLast)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -17,6 +28,11 @@ export default function Login() {
     setBusy(true)
     try {
       await login(who, password)
+      try {
+        localStorage.setItem(LAST_KEY, who)
+      } catch {
+        /* ignore */
+      }
     } catch (err) {
       setError(err.message || '登入失敗')
     } finally {

@@ -29,7 +29,13 @@ export const isConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 
 export const supabase = isConfigured
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+      auth: {
+        // 登入一次後長期保持:session 存在裝置 localStorage,access token 到期自動用 refresh token 續期
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+        storageKey: 'missionapp-auth',
+      },
     })
   : null
 

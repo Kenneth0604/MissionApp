@@ -15,7 +15,7 @@ import SetupNeeded from './pages/SetupNeeded.jsx'
 import Splash from './components/Splash.jsx'
 
 export default function App() {
-  const { configured, authLoading, authUser, ready, fatal, logout } = useStore()
+  const { configured, authLoading, authUser, ready, fatal, retry, logout } = useStore()
 
   if (!configured) return <SetupNeeded />
   if (authLoading) return <Splash />
@@ -28,7 +28,7 @@ export default function App() {
     )
   }
 
-  if (fatal) return <Splash error={fatal} onLogout={logout} />
+  if (fatal) return <Splash error={fatal} onRetry={retry} onLogout={logout} />
   if (!ready) return <Splash />
 
   return (
