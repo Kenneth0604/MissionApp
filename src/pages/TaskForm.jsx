@@ -4,6 +4,7 @@ import { otherUser, useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
 import ImageUploader from '../components/ImageUploader.jsx'
 import CategoryPicker from '../components/CategoryPicker.jsx'
+import PresetPicker from '../components/PresetPicker.jsx'
 import { mainsOf, matchesFilter, subsOf } from '../lib/categories.js'
 import { DEFAULT_PRIORITY, PRIORITIES } from '../lib/priority.js'
 
@@ -58,6 +59,20 @@ export default function TaskForm() {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
   const patch = (obj) => setForm((f) => ({ ...f, ...obj }))
 
+  function applyPreset(p) {
+    patch({
+      title: p.title,
+      description: p.description,
+      category_id: p.category_id || '',
+      priority: p.priority,
+      reward_type: p.reward_type,
+      reward_points: p.reward_points,
+      reward_id: p.reward_id || '',
+    })
+    setRewardCat(p.reward_type === 'reward' && p.reward ? (p.reward.category_id || 'none') : '')
+    toast.info(`已套用「${p.title}」`)
+  }
+
   async function onSubmit(e) {
     e.preventDefault()
     if (!form.title.trim()) return toast.error('請輸入任務標題')
@@ -86,6 +101,8 @@ export default function TaskForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       <h2 className="text-xl font-bold text-ink">{editing ? '編輯任務' : '新任務'}</h2>
+
+      {!editing && <PresetPicker onPick={applyPreset} />}
 
       <Field label="標題">
         <input value={form.title} onChange={set('title')} placeholder="例如:倒垃圾" className="input" autoFocus={!editing} />

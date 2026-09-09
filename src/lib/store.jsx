@@ -44,9 +44,9 @@ export const canHelp = (t, code) => !t.shared && t.assigned_to && t.assigned_to 
 export const isHelped = (t) => !t.shared && Boolean(t.assigned_to) && Boolean(t.completed_by) && t.completed_by !== t.assigned_to
 
 const StoreContext = createContext(null)
-const WATCHED_TABLES = ['tasks', 'points_ledger', 'rewards', 'redemptions', 'categories']
+const WATCHED_TABLES = ['tasks', 'points_ledger', 'rewards', 'redemptions', 'categories', 'task_presets']
 const POLL_MS = 60_000
-const EMPTY = { tasks: [], ledger: [], rewards: [], redemptions: [], categories: [] }
+const EMPTY = { tasks: [], ledger: [], rewards: [], redemptions: [], categories: [], presets: [] }
 
 function friendlyAuthError(err) {
   const m = err?.message || ''
@@ -105,15 +105,16 @@ export function StoreProvider({ children }) {
     if (!supabase || !authUser) return
     // 週期任務「過期即丟」的結算:資料庫每天凌晨 3 點由 pg_cron 執行,這裡是開 App 時的備援(冪等)
     await supabase.rpc('rollover_recurring_tasks').then(() => {}, () => {})
-    const [t, l, r, d, c] = await Promise.all([
+    const [t, l, r, d, c, p] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('points_ledger').select('*').order('created_at', { ascending: false }),
       supabase.from('rewards').select('*').order('created_at', { ascending: true }),
       supabase.from('redemptions').select('*').order('created_at', { ascending: false }),
       supabase.from('categories').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
+      supabase.from('task_presets').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
     ])
-    throwIf(t.error || l.error || r.error || d.error || c.error)
-    setRaw({ tasks: t.data, ledger: l.data, rewards: r.data, redemptions: d.data, categories: c.data })
+    throwIf(t.error || l.error || r.error || d.error || c.error || p.error)
+    setRaw({ tasks: t.data, ledger: l.data, rewards: r.data, redemptions: d.data, categories: c.data, presets: p.data })
   }, [authUser])
 
   const scheduleRefresh = useCallback(() => {
@@ -219,6 +220,18 @@ export function StoreProvider({ children }) {
     [raw.tasks, codeOf, rewardsById, categoriesById],
   )
   const tasksById = useMemo(() => Object.fromEntries(tasks.map((t) => [t.id, t])), [tasks])
+
+  // 快捷任務(建立任務時可直接套用的範本)
+  const presets = useMemo(
+    () =>
+      raw.presets.map((p) => ({
+        ...p,
+        choices: p.choices ?? [],
+        reward: p.reward_id ? rewardsById[p.reward_id] ?? null : null,
+        category: p.category_id ? categoriesById[p.category_id] ?? null : null,
+      })),
+    [raw.presets, rewardsById, categoriesById],
+  )
 
   const ledger = useMemo(
     () => raw.ledger.map((l) => ({ ...l, user_id_raw: l.user_id, user_id: codeOf(l.user_id) })),
@@ -429,6 +442,51 @@ export function StoreProvider({ children }) {
     [refresh],
   )
 
+  // ---------- 寫入:快捷任務 ----------
+  const toPresetRow = (input) => ({
+    title: input.title.trim(),
+    description: input.description?.trim() ?? '',
+    category_id: input.category_id || null,
+    priority: Math.min(5, Math.max(1, Number(input.priority) || 3)),
+    choices: normalizeChoices(input.choices),
+    reward_type: input.reward_type ?? 'points',
+    reward_points: input.reward_type === 'points' ? Number(input.reward_points) || 0 : 0,
+    reward_id: input.reward_type === 'reward' ? input.reward_id || null : null,
+  })
+
+  const createPreset = useCallback(
+    async (input) => {
+      const sort_order = presets.length
+      const { data, error } = await supabase
+        .from('task_presets')
+        .insert({ ...toPresetRow(input), sort_order, created_by: userId })
+        .select()
+        .single()
+      throwIf(error)
+      await refresh()
+      return data
+    },
+    [presets.length, userId, refresh],
+  )
+
+  const updatePreset = useCallback(
+    async (id, input) => {
+      const { error } = await supabase.from('task_presets').update(toPresetRow(input)).eq('id', id)
+      throwIf(error)
+      await refresh()
+    },
+    [refresh],
+  )
+
+  const deletePreset = useCallback(
+    async (id) => {
+      const { error } = await supabase.from('task_presets').delete().eq('id', id)
+      throwIf(error)
+      await refresh()
+    },
+    [refresh],
+  )
+
   const value = useMemo(
     () => ({
       configured: isConfigured,
@@ -450,6 +508,10 @@ export function StoreProvider({ children }) {
       redemptions,
       categories,
       categoriesById,
+      presets,
+      createPreset,
+      updatePreset,
+      deletePreset,
       balanceOf,
       reservedOf,
       createTask,
@@ -471,7 +533,7 @@ export function StoreProvider({ children }) {
     }),
     [
       authUser, user, userId, users, nameOf, ready, fatal, login, logout, retry, refresh,
-      tasks, ledger, rewards, redemptions, categories, categoriesById, balanceOf, reservedOf,
+      tasks, ledger, rewards, redemptions, categories, categoriesById, presets, createPreset, updatePreset, deletePreset, balanceOf, reservedOf,
       createTask, updateTask, updateSeries, deleteTask, submitTask, approveTask, rejectTask, stopRecurrence,
       createReward, updateReward, requestRedemption, fulfillRedemption, rejectRedemption,
       createCategory, updateCategory, deleteCategory,

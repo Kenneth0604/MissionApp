@@ -4,6 +4,7 @@ import { THEMES, useTheme } from '../lib/theme.jsx'
 import { useToast } from '../lib/toast.jsx'
 import { disablePush, enablePush, getCurrentSubscription, pushEnvironment } from '../lib/push.js'
 import CategoryManager from '../components/CategoryManager.jsx'
+import TaskPresetManager from '../components/TaskPresetManager.jsx'
 
 export default function Settings() {
   const { user, nameOf, userId, logout } = useStore()
@@ -63,6 +64,12 @@ export default function Settings() {
       <section>
         <h2 className="section-title">類別管理</h2>
         <CategoryManager />
+      </section>
+
+      <section>
+        <h2 className="section-title">快捷任務</h2>
+        <p className="mb-2 text-xs text-muted">建立任務時可以直接套用這裡設定好的內容(標題、類別、優先程度、獎勵)。</p>
+        <TaskPresetManager />
       </section>
 
       <section>
