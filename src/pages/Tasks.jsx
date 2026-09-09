@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { isReviewer, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 import CategoryFilter from '../components/CategoryFilter.jsx'
+import { matchesFilter } from '../lib/categories.js'
 
 const TABS = [
   { key: 'mine', label: '我要完成的' },
@@ -11,14 +12,13 @@ const TABS = [
 ]
 
 export default function Tasks() {
-  const { user, tasks } = useStore()
+  const { user, tasks, categoriesById } = useStore()
   const [params, setParams] = useSearchParams()
   const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'mine'
   const [category, setCategory] = useState('')
 
   const list = tasks.filter((t) => {
-    if (category === 'none' && t.category_id) return false
-    if (category && category !== 'none' && t.category_id !== category) return false
+    if (!matchesFilter(t, category, categoriesById)) return false
     if (tab === 'history') return t.status === 'approved'
     if (t.status === 'approved') return false
     if (tab === 'mine') {

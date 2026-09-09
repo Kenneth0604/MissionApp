@@ -93,10 +93,7 @@ html {
 
 body {
   position: fixed;                   /* 鎖住 body,任何溢出都不會讓整頁左右晃 */
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  height: 100dvh;                    /* iOS 主畫面 App:以動態視窗高度貼齊螢幕底部 */
+  inset: 0;                          /* 不宣告 height:讓 inset 撐滿整個視窗(含 iOS 安全區) */
   overflow: hidden;
   background: var(--t-bg);
   color: var(--t-ink);
@@ -110,6 +107,7 @@ body {
 
 #root {
   height: 100%;
+  height: var(--app-h, 100%);        /* 由 viewportFix.js 以 window.innerHeight 量測,避開 iOS 主畫面 App 的高度誤差 */
   overflow-x: hidden;
   overflow-y: auto;                  /* 登入頁等沒有內部捲動容器的畫面在此捲動 */
   -webkit-overflow-scrolling: touch;

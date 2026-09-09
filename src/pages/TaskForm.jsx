@@ -4,6 +4,7 @@ import { otherUser, useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
 import ImageUploader from '../components/ImageUploader.jsx'
 import CategoryPicker from '../components/CategoryPicker.jsx'
+import { mainsOf, matchesFilter, subsOf } from '../lib/categories.js'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -11,19 +12,24 @@ export default function TaskForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, nameOf, tasks, rewards, categories, createTask, updateTask } = useStore()
+  const { user, nameOf, tasks, rewards, categories, categoriesById, createTask, updateTask } = useStore()
   const editing = id ? tasks.find((t) => t.id === id) : null
   const activeRewards = rewards.filter((r) => r.is_active && r.stock !== 0)
-  // 指定獎勵:先選分類再選細項。只列出有可用獎勵的分類;沒分類的獎勵歸在「未分類」
-  const rewardCats = [
-    ...categories.filter((c) => c.kind === 'reward' && activeRewards.some((r) => r.category_id === c.id)),
+  // 指定獎勵:主類別 → 次類別(可略)→ 獎勵。只列出有可用獎勵的類別;沒分類的獎勵歸在「未分類」
+  const rewardMains = [
+    ...mainsOf(categories, 'reward').filter((c) => activeRewards.some((r) => matchesFilter(r, c.id, categoriesById))),
     ...(activeRewards.some((r) => !r.category_id) ? [{ id: 'none', name: '未分類' }] : []),
   ]
   const [rewardCat, setRewardCat] = useState(() => {
     const cur = editing?.reward_id ? rewards.find((r) => r.id === editing.reward_id) : null
     return cur ? cur.category_id || 'none' : ''
   })
-  const rewardsInCat = activeRewards.filter((r) => (rewardCat === 'none' ? !r.category_id : r.category_id === rewardCat))
+  const rewardCatObj = rewardCat && rewardCat !== 'none' ? categoriesById[rewardCat] : null
+  const rewardMainId = rewardCat === 'none' ? 'none' : rewardCatObj ? (rewardCatObj.parent_id || rewardCatObj.id) : ''
+  const rewardSubs = rewardMainId && rewardMainId !== 'none'
+    ? subsOf(categories, rewardMainId).filter((s) => activeRewards.some((r) => r.category_id === s.id))
+    : []
+  const rewardsInCat = activeRewards.filter((r) => matchesFilter(r, rewardCat, categoriesById))
 
   const [form, setForm] = useState(() => ({
     title: editing?.title ?? '',
@@ -141,30 +147,45 @@ export default function TaskForm() {
         ) : (
           <div className="mt-3 space-y-3 rounded-2xl bg-surface-2 p-3">
             <div>
-              <p className="mb-1.5 text-xs font-medium text-muted">1. 選分類</p>
+              <p className="mb-1.5 text-xs font-medium text-muted">1. 主類別</p>
               <div className="flex flex-wrap gap-2">
-                {rewardCats.map((c) => (
+                {rewardMains.map((c) => (
                   <button
                     type="button"
                     key={c.id}
                     onClick={() => { setRewardCat(c.id); patch({ reward_id: '' }) }}
-                    className={`chip py-2 ${rewardCat === c.id ? 'chip-active' : ''}`}
+                    className={`chip py-2 ${rewardMainId === c.id ? 'chip-active' : ''}`}
                   >
                     {c.name}
                   </button>
                 ))}
               </div>
             </div>
+            {rewardSubs.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted">2. 次類別</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => { setRewardCat(rewardMainId); patch({ reward_id: '' }) }} className={`chip py-2 ${rewardCat === rewardMainId ? 'bg-accent text-white ring-accent' : ''}`}>
+                    全部
+                  </button>
+                  {rewardSubs.map((s) => (
+                    <button type="button" key={s.id} onClick={() => { setRewardCat(s.id); patch({ reward_id: '' }) }} className={`chip py-2 ${rewardCat === s.id ? 'bg-accent text-white ring-accent' : ''}`}>
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {rewardCat && (
               <div>
-                <p className="mb-1.5 text-xs font-medium text-muted">2. 選獎勵</p>
+                <p className="mb-1.5 text-xs font-medium text-muted">{rewardSubs.length > 0 ? '3.' : '2.'} 選獎勵</p>
                 <div className="flex flex-wrap gap-2">
                   {rewardsInCat.map((r) => (
                     <button
                       type="button"
                       key={r.id}
                       onClick={() => patch({ reward_id: r.id })}
-                      className={`chip py-2 ${form.reward_id === r.id ? 'bg-accent text-white ring-accent' : ''}`}
+                      className={`chip py-2 ${form.reward_id === r.id ? 'bg-primary text-primary-fg ring-primary' : ''}`}
                     >
                       {r.name}{r.stock > 0 ? `(剩 ${r.stock})` : ''}
                     </button>

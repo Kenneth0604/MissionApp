@@ -172,7 +172,12 @@ export function StoreProvider({ children }) {
     [users],
   )
 
-  const categories = raw.categories
+  // 類別:兩層(主類別 parent_id 為 null;次類別指向主類別),附上 parent 物件方便顯示
+  const categories = useMemo(() => {
+    const byId = Object.fromEntries(raw.categories.map((c) => [c.id, { ...c }]))
+    Object.values(byId).forEach((c) => { c.parent = c.parent_id ? byId[c.parent_id] ?? null : null })
+    return Object.values(byId).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
+  }, [raw.categories])
   const categoriesById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories])
 
   const rewards = useMemo(
@@ -340,12 +345,13 @@ export function StoreProvider({ children }) {
   )
 
   // ---------- 寫入:類別 ----------
+  /** 新增類別;parent_id 有值即為次類別 */
   const createCategory = useCallback(
-    async ({ kind, name, description }) => {
-      const sort_order = categories.filter((c) => c.kind === kind).length
+    async ({ kind, name, parent_id = null }) => {
+      const sort_order = categories.filter((c) => c.kind === kind && (c.parent_id ?? null) === parent_id).length
       const { data, error } = await supabase
         .from('categories')
-        .insert({ kind, name: name.trim(), description: description?.trim() || null, sort_order, created_by: userId })
+        .insert({ kind, name: name.trim(), parent_id, sort_order, created_by: userId })
         .select()
         .single()
       throwIf(error)
@@ -356,11 +362,8 @@ export function StoreProvider({ children }) {
   )
 
   const updateCategory = useCallback(
-    async (id, { name, description }) => {
-      const { error } = await supabase
-        .from('categories')
-        .update({ name: name.trim(), description: description?.trim() || null })
-        .eq('id', id)
+    async (id, { name }) => {
+      const { error } = await supabase.from('categories').update({ name: name.trim() }).eq('id', id)
       throwIf(error)
       await refresh()
     },
@@ -396,6 +399,7 @@ export function StoreProvider({ children }) {
       rewards,
       redemptions,
       categories,
+      categoriesById,
       balanceOf,
       reservedOf,
       createTask,
@@ -416,7 +420,7 @@ export function StoreProvider({ children }) {
     }),
     [
       authUser, user, userId, users, nameOf, ready, fatal, login, logout, retry, refresh,
-      tasks, ledger, rewards, redemptions, categories, balanceOf, reservedOf,
+      tasks, ledger, rewards, redemptions, categories, categoriesById, balanceOf, reservedOf,
       createTask, updateTask, deleteTask, submitTask, approveTask, rejectTask, stopRecurrence,
       createReward, updateReward, requestRedemption, fulfillRedemption, rejectRedemption,
       createCategory, updateCategory, deleteCategory,

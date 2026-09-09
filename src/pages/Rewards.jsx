@@ -5,9 +5,10 @@ import { useToast } from '../lib/toast.jsx'
 import CategoryFilter from '../components/CategoryFilter.jsx'
 import CategoryChip from '../components/CategoryChip.jsx'
 import ImageGallery from '../components/ImageGallery.jsx'
+import { matchesFilter } from '../lib/categories.js'
 
 export default function Rewards() {
-  const { user, nameOf, rewards, balanceOf, reservedOf, requestRedemption } = useStore()
+  const { user, nameOf, rewards, categoriesById, balanceOf, reservedOf, requestRedemption } = useStore()
   const toast = useToast()
   const [showInactive, setShowInactive] = useState(false)
   const [category, setCategory] = useState('')
@@ -18,9 +19,7 @@ export default function Rewards() {
   const available = balance - reservedOf(user)
   const list = rewards.filter((r) => {
     if (!showInactive && !r.is_active) return false
-    if (category === 'none') return !r.category_id
-    if (category) return r.category_id === category
-    return true
+    return matchesFilter(r, category, categoriesById)
   })
 
   async function onRequest(r) {

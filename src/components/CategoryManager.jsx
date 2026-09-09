@@ -1,26 +1,30 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
+import { mainsOf, subsOf } from '../lib/categories.js'
 
 const KINDS = [
   { key: 'task', label: '任務類別' },
   { key: 'reward', label: '獎勵類別' },
 ]
 
-/** 設定頁:管理任務 / 獎勵類別(名稱 + 文字說明) */
+/** 設定頁:管理主類別與次類別 */
 export default function CategoryManager() {
   const { categories, tasks, rewards, createCategory, updateCategory, deleteCategory } = useStore()
   const toast = useToast()
   const [kind, setKind] = useState('task')
-  const [newName, setNewName] = useState('')
-  const [newDesc, setNewDesc] = useState('')
+  const [newMain, setNewMain] = useState('')
+  const [subInputs, setSubInputs] = useState({}) // mainId -> 輸入中的次類別名稱
   const [editingId, setEditingId] = useState(null)
   const [editName, setEditName] = useState('')
-  const [editDesc, setEditDesc] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const list = categories.filter((c) => c.kind === kind)
-  const usage = (id) => (kind === 'task' ? tasks : rewards).filter((x) => x.category_id === id).length
+  const mains = mainsOf(categories, kind)
+  const items = kind === 'task' ? tasks : rewards
+  const usage = (c) => {
+    const ids = new Set([c.id, ...subsOf(categories, c.id).map((s) => s.id)])
+    return items.filter((x) => ids.has(x.category_id)).length
+  }
 
   async function run(fn, ok) {
     setBusy(true)
@@ -34,36 +38,40 @@ export default function CategoryManager() {
     }
   }
 
-  function onAdd(e) {
+  function addMain(e) {
     e.preventDefault()
-    if (!newName.trim()) return
+    if (!newMain.trim()) return
+    run(async () => { await createCategory({ kind, name: newMain }); setNewMain('') }, '已新增主類別')
+  }
+  function addSub(mainId) {
+    const name = (subInputs[mainId] || '').trim()
+    if (!name) return
     run(async () => {
-      await createCategory({ kind, name: newName, description: newDesc })
-      setNewName('')
-      setNewDesc('')
-    }, '已新增類別')
+      await createCategory({ kind, name, parent_id: mainId })
+      setSubInputs((s) => ({ ...s, [mainId]: '' }))
+    }, '已新增次類別')
   }
-
-  function startEdit(c) {
-    setEditingId(c.id)
-    setEditName(c.name)
-    setEditDesc(c.description ?? '')
-  }
-
-  function onSave() {
+  function saveEdit() {
     if (!editName.trim()) return toast.error('名稱不能空白')
-    run(async () => {
-      await updateCategory(editingId, { name: editName, description: editDesc })
-      setEditingId(null)
-    }, '已儲存')
+    run(async () => { await updateCategory(editingId, { name: editName }); setEditingId(null) }, '已儲存')
   }
-
-  function onDelete(c) {
-    const n = usage(c.id)
-    const msg = n > 0 ? `「${c.name}」目前有 ${n} 筆資料使用中,刪除後這些資料會變成未分類。確定刪除?` : `刪除類別「${c.name}」?`
+  function remove(c, isMain) {
+    const n = usage(c)
+    const extra = isMain && subsOf(categories, c.id).length ? `,底下的 ${subsOf(categories, c.id).length} 個次類別也會一起刪除` : ''
+    const msg = n > 0
+      ? `「${c.name}」目前有 ${n} 筆資料使用中${extra},刪除後這些資料會變成未分類。確定刪除?`
+      : `刪除${isMain ? '主' : '次'}類別「${c.name}」${extra}?`
     if (!confirm(msg)) return
     run(() => deleteCategory(c.id), '已刪除')
   }
+
+  const EditRow = (c) => (
+    <div className="flex flex-1 items-center gap-2">
+      <input value={editName} onChange={(e) => setEditName(e.target.value)} className="input flex-1 py-1.5" autoFocus />
+      <button onClick={() => setEditingId(null)} className="btn-secondary px-3 py-1.5 text-xs">取消</button>
+      <button onClick={saveEdit} disabled={busy} className="btn-primary px-3 py-1.5 text-xs">儲存</button>
+    </div>
+  )
 
   return (
     <div className="card p-4">
@@ -75,40 +83,54 @@ export default function CategoryManager() {
         ))}
       </div>
 
-      <ul className="mt-3 divide-y divide-line">
-        {list.length === 0 && <li className="py-3 text-center text-sm text-muted">還沒有類別</li>}
-        {list.map((c) => (
-          <li key={c.id} className="py-2.5">
-            {editingId === c.id ? (
-              <div className="space-y-2">
-                <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="類別名稱" className="input py-1.5" autoFocus />
-                <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="說明(選填)" className="input py-1.5" />
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => setEditingId(null)} className="btn-secondary px-3 py-1.5 text-xs">取消</button>
-                  <button onClick={onSave} disabled={busy} className="btn-primary px-3 py-1.5 text-xs">儲存</button>
-                </div>
-              </div>
-            ) : (
+      <div className="mt-3 space-y-3">
+        {mains.length === 0 && <p className="py-3 text-center text-sm text-muted">還沒有類別</p>}
+        {mains.map((m) => {
+          const subs = subsOf(categories, m.id)
+          return (
+            <div key={m.id} className="rounded-xl bg-surface-2 p-3">
+              {/* 主類別 */}
               <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink">{c.name}</p>
-                  {c.description && <p className="truncate text-xs text-muted">{c.description}</p>}
-                </div>
-                <span className="shrink-0 text-xs text-muted">{usage(c.id)} 筆</span>
-                <button onClick={() => startEdit(c)} className="chip shrink-0 px-2.5 py-1 text-xs">編輯</button>
-                <button onClick={() => onDelete(c)} disabled={busy} className="chip shrink-0 px-2.5 py-1 text-xs text-danger">刪除</button>
+                {editingId === m.id ? EditRow(m) : (
+                  <>
+                    <p className="min-w-0 flex-1 truncate font-semibold text-ink">{m.name}</p>
+                    <span className="shrink-0 text-xs text-muted">{usage(m)} 筆</span>
+                    <button onClick={() => { setEditingId(m.id); setEditName(m.name) }} className="chip shrink-0 px-2.5 py-1 text-xs">改名</button>
+                    <button onClick={() => remove(m, true)} disabled={busy} className="chip shrink-0 px-2.5 py-1 text-xs text-danger">刪除</button>
+                  </>
+                )}
               </div>
-            )}
-          </li>
-        ))}
-      </ul>
+              {/* 次類別 */}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {subs.map((s) =>
+                  editingId === s.id ? (
+                    <div key={s.id} className="flex w-full items-center gap-2">{EditRow(s)}</div>
+                  ) : (
+                    <span key={s.id} className="chip gap-1 py-1 pr-1 text-xs">
+                      <button type="button" onClick={() => { setEditingId(s.id); setEditName(s.name) }}>{s.name}</button>
+                      <button type="button" aria-label="刪除" onClick={() => remove(s, false)} className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-surface text-[10px] text-muted">✕</button>
+                    </span>
+                  ),
+                )}
+                {subs.length === 0 && <span className="text-xs text-muted">尚無次類別</span>}
+              </div>
+              <form onSubmit={(e) => { e.preventDefault(); addSub(m.id) }} className="mt-2 flex gap-2">
+                <input
+                  value={subInputs[m.id] || ''}
+                  onChange={(e) => setSubInputs((s) => ({ ...s, [m.id]: e.target.value }))}
+                  placeholder={`在「${m.name}」下新增次類別`}
+                  className="input flex-1 py-1.5 text-sm"
+                />
+                <button type="submit" disabled={busy || !(subInputs[m.id] || '').trim()} className="btn-secondary shrink-0 px-3 py-1.5 text-xs">＋ 次類別</button>
+              </form>
+            </div>
+          )
+        })}
+      </div>
 
-      <form onSubmit={onAdd} className="mt-3 space-y-2 border-t border-line pt-3">
-        <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={`新增${kind === 'task' ? '任務' : '獎勵'}類別名稱`} className="input" />
-        <div className="flex gap-2">
-          <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="說明(選填)" className="input flex-1" />
-          <button type="submit" disabled={busy || !newName.trim()} className="btn-primary shrink-0 px-4 text-sm">新增</button>
-        </div>
+      <form onSubmit={addMain} className="mt-3 flex gap-2 border-t border-line pt-3">
+        <input value={newMain} onChange={(e) => setNewMain(e.target.value)} placeholder={`新增${kind === 'task' ? '任務' : '獎勵'}主類別`} className="input flex-1" />
+        <button type="submit" disabled={busy || !newMain.trim()} className="btn-primary shrink-0 px-4 text-sm">新增</button>
       </form>
     </div>
   )

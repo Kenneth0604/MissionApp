@@ -1,31 +1,33 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
+import { mainsOf, subsOf } from '../lib/categories.js'
 
 /**
- * 類別選擇器(表單用)
+ * 類別選擇器(表單用):先選主類別,再選次類別(可不選)
  * kind: 'task' | 'reward'
- * value: category id 或 ''(未分類)
+ * value: 類別 id(次類別或主類別)或 ''(未分類)
  */
 export default function CategoryPicker({ kind, value, onChange }) {
-  const { categories, createCategory } = useStore()
+  const { categories, categoriesById, createCategory } = useStore()
   const toast = useToast()
-  const list = categories.filter((c) => c.kind === kind)
-  const selected = list.find((c) => c.id === value)
-  const [adding, setAdding] = useState(false)
+  const mains = mainsOf(categories, kind)
+  const selected = value ? categoriesById[value] : null
+  const mainId = selected ? (selected.parent_id || selected.id) : ''
+  const subs = mainId ? subsOf(categories, mainId) : []
+
+  const [adding, setAdding] = useState(null) // null | 'main' | 'sub'
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function onAdd() {
     if (!name.trim()) return toast.error('請輸入類別名稱')
     setBusy(true)
     try {
-      const c = await createCategory({ kind, name, description })
+      const c = await createCategory({ kind, name, parent_id: adding === 'sub' ? mainId : null })
       onChange(c.id)
-      setAdding(false)
+      setAdding(null)
       setName('')
-      setDescription('')
     } catch (err) {
       toast.error(err)
     } finally {
@@ -33,32 +35,49 @@ export default function CategoryPicker({ kind, value, onChange }) {
     }
   }
 
+  const AddBox = (
+    <div className="mt-2 flex gap-2">
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={adding === 'sub' ? '次類別名稱' : '主類別名稱'} className="input flex-1 py-2" autoFocus />
+      <button type="button" onClick={onAdd} disabled={busy} className="btn-primary px-3 py-2 text-sm">加入</button>
+      <button type="button" onClick={() => { setAdding(null); setName('') }} className="btn-secondary px-3 py-2 text-sm">取消</button>
+    </div>
+  )
+
   return (
-    <div>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => onChange('')} className={`chip ${!value ? 'chip-active' : ''}`}>
-          未分類
-        </button>
-        {list.map((c) => (
-          <button type="button" key={c.id} onClick={() => onChange(c.id)} className={`chip ${value === c.id ? 'chip-active' : ''}`}>
-            {c.name}
-          </button>
-        ))}
-        {!adding && (
-          <button type="button" onClick={() => setAdding(true)} className="chip text-muted">
-            ＋ 新類別
-          </button>
-        )}
+    <div className="space-y-2">
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-muted">主類別</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => onChange('')} className={`chip ${!value ? 'chip-active' : ''}`}>未分類</button>
+          {mains.map((c) => (
+            <button type="button" key={c.id} onClick={() => onChange(c.id)} className={`chip ${mainId === c.id ? 'chip-active' : ''}`}>
+              {c.name}
+            </button>
+          ))}
+          {adding !== 'main' && (
+            <button type="button" onClick={() => { setAdding('main'); setName('') }} className="chip text-muted">＋ 新主類別</button>
+          )}
+        </div>
+        {adding === 'main' && AddBox}
       </div>
-      {selected?.description && <p className="mt-1.5 text-xs text-muted">{selected.description}</p>}
-      {adding && (
-        <div className="mt-2 space-y-2 rounded-xl bg-surface-2 p-3">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="類別名稱" className="input" autoFocus />
-          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="說明(選填)" className="input" />
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setAdding(false)} className="btn-secondary flex-1 py-2 text-sm">取消</button>
-            <button type="button" onClick={onAdd} disabled={busy} className="btn-primary flex-1 py-2 text-sm">加入</button>
+
+      {mainId && (
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-muted">次類別(可不選)</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => onChange(mainId)} className={`chip ${value === mainId ? 'bg-accent text-white ring-accent' : ''}`}>
+              不分次類別
+            </button>
+            {subs.map((c) => (
+              <button type="button" key={c.id} onClick={() => onChange(c.id)} className={`chip ${value === c.id ? 'bg-accent text-white ring-accent' : ''}`}>
+                {c.name}
+              </button>
+            ))}
+            {adding !== 'sub' && (
+              <button type="button" onClick={() => { setAdding('sub'); setName('') }} className="chip text-muted">＋ 新次類別</button>
+            )}
           </div>
+          {adding === 'sub' && AddBox}
         </div>
       )}
     </div>
