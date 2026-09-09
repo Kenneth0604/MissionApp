@@ -98,6 +98,8 @@ export function StoreProvider({ children }) {
   // ---------- 讀取 ----------
   const refresh = useCallback(async () => {
     if (!supabase || !authUser) return
+    // 週期任務「過期即丟」的結算:資料庫每天凌晨 3 點由 pg_cron 執行,這裡是開 App 時的備援(冪等)
+    await supabase.rpc('rollover_recurring_tasks').then(() => {}, () => {})
     const [t, l, r, d, c] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('points_ledger').select('*').order('created_at', { ascending: false }),
@@ -195,7 +197,7 @@ export function StoreProvider({ children }) {
 
   const tasks = useMemo(
     () =>
-      raw.tasks.map((t) => ({
+      raw.tasks.filter((t) => t.status !== 'expired').map((t) => ({
         ...t,
         created_by_id: t.created_by,
         assigned_to_id: t.assigned_to,

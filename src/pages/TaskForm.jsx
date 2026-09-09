@@ -6,6 +6,7 @@ import ImageUploader from '../components/ImageUploader.jsx'
 import CategoryPicker from '../components/CategoryPicker.jsx'
 import { mainsOf, matchesFilter, subsOf } from '../lib/categories.js'
 import { DEFAULT_PRIORITY, PRIORITIES } from '../lib/priority.js'
+import { appTodayISO } from '../lib/format.js'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -45,6 +46,7 @@ export default function TaskForm() {
     due_date: editing?.due_date ?? '',
     freq: editing?.recurrence_rule?.freq ?? 'none',
     day_of_week: editing?.recurrence_rule?.day_of_week ?? new Date().getDay(),
+    expire_on_miss: editing?.recurrence_rule?.expire_on_miss ?? false,
   }))
   const [busy, setBusy] = useState(false)
 
@@ -66,11 +68,16 @@ export default function TaskForm() {
     const recurrence_rule =
       form.freq === 'none'
         ? null
-        : form.freq === 'daily'
-          ? { freq: 'daily', active: true }
-          : { freq: 'weekly', day_of_week: Number(form.day_of_week), active: true }
+        : {
+            freq: form.freq,
+            ...(form.freq === 'weekly' ? { day_of_week: Number(form.day_of_week) } : {}),
+            active: true,
+            expire_on_miss: Boolean(form.expire_on_miss),
+          }
 
-    const payload = { ...form, recurrence_rule, reward_points: Number(form.reward_points), reward_id: form.reward_id || null, due_date: form.due_date || null }
+    // 過期即丟一定要有期限才知道哪一期算過期;沒填就用 App 的「今天」(凌晨 3 點換日)
+    const due_date = form.due_date || (recurrence_rule?.expire_on_miss ? appTodayISO() : null)
+    const payload = { ...form, recurrence_rule, reward_points: Number(form.reward_points), reward_id: form.reward_id || null, due_date }
 
     setBusy(true)
     try {
@@ -241,7 +248,21 @@ export default function TaskForm() {
             ))}
           </div>
         )}
-        {form.freq !== 'none' && <p className="mt-2 text-xs text-muted">審核通過後才會自動產生下一期任務。</p>}
+        {form.freq !== 'none' && (
+          <div className="mt-3 rounded-xl bg-surface-2 p-3">
+            <label className="flex items-start gap-2 text-sm text-ink">
+              <input type="checkbox" checked={form.expire_on_miss} onChange={(e) => patch({ expire_on_miss: e.target.checked })} className="mt-0.5 accent-primary" />
+              <span>
+                <span className="font-medium">過期即丟</span>
+                <span className="mt-0.5 block text-xs text-muted">
+                  每天凌晨 3 點結算:到期沒完成的那一期會直接消失並換成新的一期;有完成的照常記進歷史。適合「練樂器」這類每天都要重來的習慣。
+                </span>
+              </span>
+            </label>
+            {!form.expire_on_miss && <p className="mt-2 text-xs text-muted">未勾選時:審核通過後才會產生下一期,沒做完的會一直留著。</p>}
+            {form.expire_on_miss && !form.due_date && <p className="mt-2 text-xs text-muted">沒填期限的話,第一期的期限會自動設為今天。</p>}
+          </div>
+        )}
       </Field>
 
       <div className="flex gap-3 pt-2">
