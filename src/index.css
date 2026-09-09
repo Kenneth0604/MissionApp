@@ -26,7 +26,7 @@
   --color-info-soft: var(--t-info-soft);
 }
 
-/* 花漾:粉紅 × 薰衣草(預設) */
+/* 粉粉:粉紅 × 薰衣草(預設) */
 :root,
 [data-theme="blossom"] {
   color-scheme: light;
@@ -53,7 +53,7 @@
   --t-hero-to: #a78bfa;
 }
 
-/* 石墨:黑灰色系 */
+/* 黑黑:黑灰色系 */
 [data-theme="graphite"] {
   color-scheme: dark;
   --t-bg: #111316;
@@ -96,6 +96,7 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;                    /* iOS 主畫面 App:以動態視窗高度貼齊螢幕底部 */
   overflow: hidden;
   background: var(--t-bg);
   color: var(--t-ink);

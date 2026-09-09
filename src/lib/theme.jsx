@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
 export const THEMES = [
-  { id: 'blossom', name: '花漾', desc: '粉紅 × 薰衣草', swatch: ['#e86aa8', '#a78bfa', '#fbf4f8'], themeColor: '#e86aa8' },
-  { id: 'graphite', name: '石墨', desc: '黑灰色系', swatch: ['#1b1e23', '#8b93a1', '#e5e7eb'], themeColor: '#1b1e23' },
+  { id: 'blossom', name: '粉粉', desc: '粉紅 × 薰衣草', swatch: ['#e86aa8', '#a78bfa', '#fbf4f8'], themeColor: '#e86aa8' },
+  { id: 'graphite', name: '黑黑', desc: '黑灰色系', swatch: ['#1b1e23', '#8b93a1', '#e5e7eb'], themeColor: '#1b1e23' },
 ]
 
 const KEY = 'missionapp:theme'

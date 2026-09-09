@@ -25,11 +25,12 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-4">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4">
         <Outlet />
       </main>
 
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface">
+      {/* 一般 flex 子元素而非 fixed:iOS 主畫面 App 對 fixed+bottom:0 的高度計算會留縫 */}
+      <nav className="pb-safe z-10 shrink-0 border-t border-line bg-surface">
         <div className="mx-auto grid max-w-md grid-cols-5">
           {nav.map(({ to, label, icon: Icon, end, badge }) => (
             <NavLink
