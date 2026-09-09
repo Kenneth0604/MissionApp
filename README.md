@@ -104,8 +104,15 @@ npx supabase functions deploy push-notify --no-verify-jwt
 ### 6. 建立 Database Webhook
 
 開啟 [`supabase/migrations/0002_push_webhooks.sql`](supabase/migrations/0002_push_webhooks.sql),把 `PROJECT_REF` 與 `WEBHOOK_SECRET` 換成上一步的值,貼到 SQL Editor 執行。
+它用 `pg_net` 建立兩個 trigger(`tasks`、`redemptions` 的 Insert / Update),直接呼叫 Edge Function,不需要在 Dashboard 另外建 Webhook。
 
-(或用 Dashboard → Database → Webhooks 手動建立兩個 webhook:table `tasks` 與 `redemptions`,事件 Insert + Update,type 選 Supabase Edge Function `push-notify`,HTTP Headers 加 `x-webhook-secret: <WEBHOOK_SECRET>`。)
+也可以用 CLI 執行(已 `supabase link` 的情況下):
+
+```bash
+npx supabase db query --linked -f supabase/migrations/0002_push_webhooks.sql
+```
+
+要確認推播有送出,可查 `select status_code, content from net._http_response order by id desc limit 5;`。
 
 ---
 
