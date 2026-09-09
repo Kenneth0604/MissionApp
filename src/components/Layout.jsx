@@ -25,7 +25,7 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-4">
         <Outlet />
       </main>
 

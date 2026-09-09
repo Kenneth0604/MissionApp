@@ -79,15 +79,48 @@
   --t-hero-to: #1b1e23;
 }
 
-html, body, #root { height: 100%; }
+/* ------------------------------------------------------------------
+   App 外殼:整頁固定,只允許 #root / main 垂直捲動
+   - 禁止整頁左右平移與橘皮彈跳,避免像網頁一樣可以拖動
+   - 內容區(Layout 的 <main>)才是捲動容器
+------------------------------------------------------------------- */
+html {
+  height: 100%;
+  overflow: hidden;
+  touch-action: pan-y;               /* 只接受垂直手勢,不做橫向平移 / 縮放 */
+  -webkit-text-size-adjust: 100%;
+}
 
 body {
+  position: fixed;                   /* 鎖住 body,任何溢出都不會讓整頁左右晃 */
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   background: var(--t-bg);
   color: var(--t-ink);
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior-y: none;
+  -webkit-touch-callout: none;       /* 長按不跳出連結預覽 */
+  -webkit-user-select: none;         /* 介面文字不可選取,更像原生 App */
+  user-select: none;
+  overscroll-behavior: none;
 }
+
+#root {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;                  /* 登入頁等沒有內部捲動容器的畫面在此捲動 */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 表單與可讀內容仍可選取 / 複製 */
+input, textarea, select, [data-selectable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+img { max-width: 100%; }
 
 /* iOS 安全區(瀏海與 Home 指示條) */
 .pt-safe { padding-top: env(safe-area-inset-top); }
