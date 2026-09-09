@@ -142,7 +142,10 @@ img { max-width: 100%; }
   .btn-danger-outline { @apply bg-surface text-danger ring-1 ring-danger/40; }
   .chip { @apply inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium ring-1 ring-line bg-surface text-ink; }
   .chip-active { @apply bg-primary text-primary-fg ring-primary; }
-  .input { @apply w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/25; }
+  /* min-w-0:iOS 的 input / select 有固定的內建最小寬度,放進 flex 列會撐破容器造成橫向捲動 */
+  .input { @apply w-full min-w-0 max-w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/25; }
+  textarea.input { resize: none; }
+  select.input { text-overflow: ellipsis; }
   .label { @apply mb-1.5 block text-sm font-medium text-ink; }
   .section-title { @apply mb-2 flex items-center gap-2 text-sm font-semibold text-ink; }
   .empty { @apply rounded-2xl bg-surface p-6 text-center text-sm text-muted shadow-sm ring-1 ring-line; }
