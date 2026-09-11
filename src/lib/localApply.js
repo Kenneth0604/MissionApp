@@ -38,6 +38,11 @@ export function applyLocal(raw, op, ctx) {
       const t = task(a.p_task_id)
       if (!t) return raw
       const patch = { completed_by: userId, chosen_choice: a.p_choice ?? null, note: a.p_note?.trim() ? a.p_note.trim() : t.note ?? null }
+      if (t.recurrence_rule) {
+        // 每日任務:完成即核准(下一期由伺服器產生,同步後出現)
+        const next = { ...raw, tasks: patchById(raw.tasks, t.id, { ...patch, status: 'approved', reject_reason: null }) }
+        return grantReward(next, { ...t, ...patch }, ctx)
+      }
       return { ...raw, tasks: patchById(raw.tasks, t.id, { ...patch, status: 'submitted' }) }
     }
     case 'approve_task': {
