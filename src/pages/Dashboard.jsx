@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { canHelp, isDaily, isReviewer, isTodoFor, otherUser, useStore } from '../lib/store.jsx'
+import { isDaily, isReviewer, isTodoFor, otherUser, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 
 export default function Dashboard() {
@@ -12,7 +12,6 @@ export default function Dashboard() {
   const todo = tasks.filter((t) => !isDaily(t) && isTodoFor(t, user)).sort(byUrgency)
   const toReview = tasks.filter((t) => !isDaily(t) && isReviewer(t, user)).sort(byUrgency)
   const waitingOther = tasks.filter((t) => !isDaily(t) && t.created_by === user && !t.shared && t.assigned_to !== user && (t.status === 'pending' || t.status === 'rejected')).sort(byUrgency)
-  const canHelpList = tasks.filter((t) => !isDaily(t) && canHelp(t, user))
   const dailyTodo = tasks.filter((t) => isDaily(t) && isTodoFor(t, user)).length
   const dailyReview = tasks.filter((t) => isDaily(t) && isReviewer(t, user)).length
   const toFulfill = redemptions.filter((d) => d.status === 'requested' && d.requested_by !== user)
@@ -35,12 +34,16 @@ export default function Dashboard() {
         <Stat to="/redemptions" label="待確認兌換" value={toFulfill.length} cls="text-accent" />
       </section>
 
-      <Link to="/daily" className="hero flex items-center justify-between rounded-2xl p-4 text-white shadow">
-        <span className="font-semibold">📅 每日任務</span>
-        <span className="text-sm text-white/80">
-          {dailyTodo + dailyReview > 0 ? `${dailyTodo} 個待做 · ${dailyReview} 個待審核` : '目前沒有待處理'} →
-        </span>
-      </Link>
+      <div className="grid grid-cols-2 gap-3">
+        <Link to="/daily" className="hero rounded-2xl p-4 text-white shadow">
+          <p className="font-semibold">📅 每日任務</p>
+          <p className="mt-1 text-xs text-white/80">{dailyTodo + dailyReview > 0 ? `${dailyTodo} 待做 · ${dailyReview} 待審` : '沒有待處理'} →</p>
+        </Link>
+        <Link to="/partner" className="card p-4">
+          <p className="font-semibold text-ink">👤 {nameOf(otherUser(user))} 的區</p>
+          <p className="mt-1 text-xs text-muted">積分 {balanceOf(otherUser(user))} · 看對方任務、幫忙完成 →</p>
+        </Link>
+      </div>
 
       <Link to="/tasks/new" className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 py-3.5 font-semibold text-primary">
         <span className="text-xl leading-none">＋</span> 派新任務給 {nameOf(otherUser(user))}
@@ -72,12 +75,6 @@ export default function Dashboard() {
       <Section title="我要完成的" count={todo.length} empty="目前沒有待完成的任務 🎉">
         {todo.map((t) => <TaskCard key={t.id} task={t} />)}
       </Section>
-
-      {canHelpList.length > 0 && (
-        <Section title={`可以幫忙的任務(完成可獲雙倍獎勵)`} count={canHelpList.length}>
-          {canHelpList.map((t) => <TaskCard key={t.id} task={t} />)}
-        </Section>
-      )}
 
       {waitingOther.length > 0 && (
         <Section title="等待對方完成" count={waitingOther.length}>

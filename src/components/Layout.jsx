@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { isDaily, isReviewer, isTodoFor, useStore } from '../lib/store.jsx'
+import { isDaily, isReviewer, isTodoFor, otherUser, useStore } from '../lib/store.jsx'
 
 export default function Layout() {
   const { user, nameOf, tasks, redemptions } = useStore()
@@ -23,7 +23,12 @@ export default function Layout() {
       <header className="pt-safe hero sticky top-0 z-10 text-white shadow">
         <div className="flex items-center justify-between px-4 py-3">
           <h1 className="text-lg font-bold tracking-wide">發任務用ㄉ東西</h1>
-          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium">{nameOf(user)}</span>
+          <div className="flex items-center gap-1.5">
+            <NavLink to="/partner" className={({ isActive }) => `rounded-full px-2.5 py-0.5 text-sm font-medium ${isActive ? 'bg-white text-primary' : 'bg-white/20'}`}>
+              👤 {nameOf(otherUser(user))}
+            </NavLink>
+            <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium">{nameOf(user)}</span>
+          </div>
         </div>
       </header>
 
