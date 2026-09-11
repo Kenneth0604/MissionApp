@@ -65,7 +65,7 @@ requested(待確認)→ fulfilled(已交付:扣點、扣庫存)
 ### 3. 執行 SQL migration
 
 1. SQL Editor → New query。
-2. 依序貼上並執行 `supabase/migrations/` 內的 `0001_init.sql`、`0003_categories_description.sql`、`0004_shared_tasks.sql`、`0005_category_hierarchy.sql`、`0006_task_priority.sql`、`0007_expire_on_miss.sql`、`0008_series_template.sql`、`0009_task_choices.sql`、`0010_help_double_reward.sql`、`0011_task_presets.sql`、`0012_preset_assignee.sql`、`0013_edit_any_withdraw.sql`(0002 是推播 webhook,見第 6 步)。
+2. 依序貼上並執行 `supabase/migrations/` 內的 `0001_init.sql`、`0003_categories_description.sql`、`0004_shared_tasks.sql`、`0005_category_hierarchy.sql`、`0006_task_priority.sql`、`0007_expire_on_miss.sql`、`0008_series_template.sql`、`0009_task_choices.sql`、`0010_help_double_reward.sql`、`0011_task_presets.sql`、`0012_preset_assignee.sql`、`0013_edit_any_withdraw.sql`、`0014_reward_redeemable.sql`(0002 是推播 webhook,見第 6 步)。
 3. 最後一行 `select` 應該列出 `A`、`B` 兩列。若是空的,代表 step 2 的 email 沒對上。
 
 這份 SQL 會建立:資料表、RLS policy、所有 RPC 函式、`images` Storage bucket 與其 policy、Realtime publication、keep-alive 函式。

@@ -376,6 +376,7 @@ export function StoreProvider({ children }) {
 
   // ---------- 寫入:獎勵與兌換 ----------
   const toRewardRow = (input) => ({
+    redeemable: input.redeemable ?? true,
     name: input.name.trim(),
     description: input.description?.trim() ?? '',
     image_urls: input.image_urls ?? [],

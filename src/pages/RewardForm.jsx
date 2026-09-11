@@ -17,6 +17,7 @@ export default function RewardForm() {
     description: editing?.description ?? '',
     image_urls: editing?.image_urls ?? [],
     category_id: editing?.category_id ?? '',
+    redeemable: editing?.redeemable ?? true,
     cost_points: editing?.cost_points ?? 50,
     unlimited: editing ? editing.stock === -1 : true,
     stock: editing && editing.stock >= 0 ? editing.stock : 1,
@@ -32,7 +33,7 @@ export default function RewardForm() {
   async function onSubmit(e) {
     e.preventDefault()
     if (!form.name.trim()) return toast.error('請輸入獎勵名稱')
-    if (Number(form.cost_points) < 0) return toast.error('所需積分不能是負數')
+    if (form.redeemable && Number(form.cost_points) < 0) return toast.error('所需積分不能是負數')
     setBusy(true)
     try {
       if (editing) await updateReward(editing.id, form)
@@ -71,9 +72,22 @@ export default function RewardForm() {
       </div>
 
       <div>
-        <span className="label">所需積分</span>
-        <input type="number" min="0" inputMode="numeric" value={form.cost_points} onChange={set('cost_points')} className="input" />
-        <p className="mt-1 text-xs text-muted">若獎勵是作為任務獎勵直接指定,則不會扣點。</p>
+        <span className="label">取得方式</span>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => patch({ redeemable: true })} className={`chip flex-1 ${form.redeemable ? 'chip-active' : ''}`}>可用積分兌換</button>
+          <button type="button" onClick={() => patch({ redeemable: false })} className={`chip flex-1 ${!form.redeemable ? 'chip-active' : ''}`}>僅限任務獎勵</button>
+        </div>
+        {form.redeemable ? (
+          <>
+            <div className="mt-2 flex items-center gap-2">
+              <input type="number" min="0" inputMode="numeric" value={form.cost_points} onChange={set('cost_points')} className="input" />
+              <span className="shrink-0 text-sm text-muted">點</span>
+            </div>
+            <p className="mt-1 text-xs text-muted">若獎勵是作為任務獎勵直接指定,則不會扣點。</p>
+          </>
+        ) : (
+          <p className="mt-2 text-xs text-muted">不會出現「申請兌換」按鈕,只能在建立任務時指定為完成獎勵。</p>
+        )}
       </div>
 
       <div>

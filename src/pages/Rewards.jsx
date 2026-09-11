@@ -64,7 +64,7 @@ export default function Rewards() {
           {list.map((r) => {
             const soldOut = r.stock === 0
             const affordable = available >= r.cost_points
-            const canRequest = r.is_active && !soldOut && affordable
+            const canRequest = r.is_active && r.redeemable !== false && !soldOut && affordable
             const thumb = r.image_urls[0]
             const open = expanded === r.id
             return (
@@ -86,8 +86,14 @@ export default function Rewards() {
                     {r.description && <p className="mt-1 text-sm text-muted">{r.description}</p>}
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="text-xl font-bold text-primary tabular-nums">{r.cost_points}</div>
-                    <div className="text-xs text-muted">點</div>
+                    {r.redeemable === false ? (
+                      <div className="rounded-full bg-accent-soft px-2 py-1 text-xs font-medium text-info">僅任務獎勵</div>
+                    ) : (
+                      <>
+                        <div className="text-xl font-bold text-primary tabular-nums">{r.cost_points}</div>
+                        <div className="text-xs text-muted">點</div>
+                      </>
+                    )}
                   </div>
                 </div>
                 {open && r.image_urls.length > 0 && (
@@ -96,9 +102,13 @@ export default function Rewards() {
                   </div>
                 )}
                 <div className="mt-3 flex gap-2">
-                  <button onClick={() => onRequest(r)} disabled={!canRequest || busyId === r.id} className="btn-primary flex-1 py-2.5 text-sm">
-                    {soldOut ? '已兌換完' : !affordable ? `還差 ${r.cost_points - available} 點` : busyId === r.id ? '送出中…' : '申請兌換'}
-                  </button>
+                  {r.redeemable === false ? (
+                    <p className="flex flex-1 items-center justify-center rounded-2xl bg-surface-2 py-2.5 text-sm text-muted">完成指定任務才能獲得</p>
+                  ) : (
+                    <button onClick={() => onRequest(r)} disabled={!canRequest || busyId === r.id} className="btn-primary flex-1 py-2.5 text-sm">
+                      {soldOut ? '已兌換完' : !affordable ? `還差 ${r.cost_points - available} 點` : busyId === r.id ? '送出中…' : '申請兌換'}
+                    </button>
+                  )}
                   <Link to={`/rewards/${r.id}/edit`} className="btn-secondary py-2.5 text-sm">編輯</Link>
                 </div>
               </div>
