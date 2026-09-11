@@ -33,11 +33,12 @@ export default function Tasks() {
     return t.created_by === user
   })
 
+  // 依優先程度排序(越急越前),同等級再看狀態、期限
   const rank = { submitted: 0, rejected: 1, pending: 2, approved: 3 }
   const sorted = [...list].sort((a, b) => {
     if (tab === 'history') return b.updated_at.localeCompare(a.updated_at)
+    if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3)
     if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
-    if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3) // 越急越前面
     if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
     if (a.due_date) return -1
     if (b.due_date) return 1

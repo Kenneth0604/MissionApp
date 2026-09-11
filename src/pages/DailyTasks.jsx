@@ -34,8 +34,8 @@ export default function DailyTasks() {
   const rank = { submitted: 0, rejected: 1, pending: 2, approved: 3 }
   const sorted = [...list].sort((a, b) => {
     if (tab === 'history') return b.updated_at.localeCompare(a.updated_at)
+    if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3) // 越急越前面
     if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
-    if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3)
     return b.updated_at.localeCompare(a.updated_at)
   })
 

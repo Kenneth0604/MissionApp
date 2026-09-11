@@ -10,8 +10,8 @@ export default function Dashboard() {
   // 待辦依優先程度(越急越前)再依期限排序;每日任務改在「每日任務」區顯示
   const byUrgency = (a, b) => (b.priority ?? 3) - (a.priority ?? 3) || (a.due_date || '9').localeCompare(b.due_date || '9')
   const todo = tasks.filter((t) => !isDaily(t) && isTodoFor(t, user)).sort(byUrgency)
-  const toReview = tasks.filter((t) => !isDaily(t) && isReviewer(t, user))
-  const waitingOther = tasks.filter((t) => !isDaily(t) && t.created_by === user && !t.shared && t.assigned_to !== user && (t.status === 'pending' || t.status === 'rejected'))
+  const toReview = tasks.filter((t) => !isDaily(t) && isReviewer(t, user)).sort(byUrgency)
+  const waitingOther = tasks.filter((t) => !isDaily(t) && t.created_by === user && !t.shared && t.assigned_to !== user && (t.status === 'pending' || t.status === 'rejected')).sort(byUrgency)
   const canHelpList = tasks.filter((t) => !isDaily(t) && canHelp(t, user))
   const dailyTodo = tasks.filter((t) => isDaily(t) && isTodoFor(t, user)).length
   const dailyReview = tasks.filter((t) => isDaily(t) && isReviewer(t, user)).length
