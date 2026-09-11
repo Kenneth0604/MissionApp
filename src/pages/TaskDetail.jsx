@@ -38,7 +38,7 @@ export default function TaskDetail() {
   const recurrenceActive = task.recurrence_rule && task.recurrence_rule.active !== false
   const helped = isHelped(task)
   const doubled = helped && task.reward_type === 'points'
-  const isDailyTask = Boolean(task.recurrence_rule) // 每日任務:完成即核准,不需審核;每一期可寫說明
+  const isDailyTask = Boolean(task.recurrence_rule) // 每日任務:每一期可寫當天說明
 
   async function run(fn, okMsg) {
     setBusy(true)
@@ -60,10 +60,7 @@ export default function TaskDetail() {
 
   function onSubmit() {
     if (needsChoice && !choice) return toast.error('請選一個選項')
-    run(
-      () => submitTask(task.id, choice || undefined, isDailyTask ? note : undefined),
-      isDailyTask ? '已完成 ✓' : '已送出,等待審核',
-    )
+    run(() => submitTask(task.id, choice || undefined, isDailyTask ? note : undefined), '已送出,等待審核')
   }
 
   function onSaveNote() {
@@ -129,7 +126,7 @@ export default function TaskDetail() {
           <Item label="最後更新" value={formatDateTime(task.updated_at)} />
         </dl>
 
-        {(task.note || (isDailyTask && task.status === 'approved')) && (
+        {(task.note || (isDailyTask && (task.status === 'submitted' || task.status === 'approved'))) && (
           <div className="mt-4 rounded-xl bg-surface-2 p-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-ink">📝 這一期的說明</span>
@@ -192,7 +189,7 @@ export default function TaskDetail() {
 
       {canSubmit && (
         <button onClick={onSubmit} disabled={busy || (needsChoice && !choice)} className="btn-success w-full py-3.5 text-lg">
-          ✓ {isDailyTask ? '完成(不需審核)' : '標記完成'}{choice && ` · ${choice}`}
+          ✓ 標記完成{choice && ` · ${choice}`}
         </button>
       )}
 
