@@ -1,17 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, isConfigured, USER_EMAILS, USERS } from './supabase.js'
 import { deleteImages } from './images.js'
+import { applyLocal, newId } from './localApply.js'
+import { useToast } from './toast.jsx'
 
 /**
- * 資料層(Supabase 版)
+ * 資料層(Supabase 版,離線優先)
  * ----------------------------------------------------------------
  * - 身分:Supabase Auth 兩個固定帳號(A / B),登入畫面只選身分 + 密碼
- * - 讀取:直接 select 各資料表(受 RLS 保護,只有 A、B 能讀)
- * - 寫入:涉及狀態流轉、積分、庫存的操作一律走 Postgres RPC
- *        (submit_task / approve_task / request_redemption ...),
- *        前端無法直接寫 points_ledger
- * - 即時:Realtime postgres_changes → 重新抓取;另有 60 秒輪詢與
- *        回到前景時重抓作為備援
+ * - 讀取:直接 select 各資料表(受 RLS 保護,只有 A、B 能讀);最近一次結果快取在 localStorage,
+ *        開 App 先顯示快取,再背景更新
+ * - 寫入:所有操作先套用到本機(樂觀更新)並放進 outbox,再背景依序同步到 Supabase;
+ *        離線或失敗時保留在 outbox,連線恢復後自動重送;伺服器拒絕的操作會被丟棄並提示,
+ *        然後重新抓取資料校正
+ * - 狀態流轉、積分、庫存仍一律由 Postgres RPC 執行,前端無法直接寫 points_ledger
+ * - 即時:Realtime postgres_changes → 重新抓取;另有 60 秒輪詢與回到前景時重抓作為備援
  */
 
 export const STATUS_LABEL = {
@@ -47,6 +50,25 @@ const StoreContext = createContext(null)
 const WATCHED_TABLES = ['tasks', 'points_ledger', 'rewards', 'redemptions', 'categories', 'task_presets']
 const POLL_MS = 60_000
 const EMPTY = { tasks: [], ledger: [], rewards: [], redemptions: [], categories: [], presets: [] }
+const OUTBOX_KEY = 'missionapp:outbox'
+const USERS_KEY = 'missionapp:users'
+const cacheKey = (uid) => `missionapp:cache:${uid}`
+
+const readJSON = (key, fallback) => {
+  try {
+    const v = localStorage.getItem(key)
+    return v ? JSON.parse(v) : fallback
+  } catch {
+    return fallback
+  }
+}
+const writeJSON = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    /* ignore */
+  }
+}
 
 function friendlyAuthError(err) {
   const m = err?.message || ''
@@ -60,14 +82,62 @@ function throwIf(error) {
   if (error) throw new Error(error.message || String(error))
 }
 
+/** 是「連不上」而不是「伺服器拒絕」:保留在 outbox 稍後重送 */
+function isNetworkError(err) {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
+  const m = String(err?.message || err || '')
+  return err?.name === 'TypeError' || /failed to fetch|networkerror|load failed|network request failed|timeout|ECONN|fetch/i.test(m)
+}
+
+/** 把一個 outbox 操作真的送到 Supabase */
+async function execOp(op) {
+  if (op.type === 'rpc') {
+    const { error } = await supabase.rpc(op.fn, op.args ?? {})
+    throwIf(error)
+  } else if (op.type === 'insert') {
+    const { error } = await supabase.from(op.table).insert(op.row)
+    // 重送時可能已經寫入成功(例如上次回應丟失):主鍵重複視為成功
+    if (error && !/duplicate key|23505/i.test(error.message || '')) throwIf(error)
+  } else if (op.type === 'update') {
+    const { error } = await supabase.from(op.table).update(op.row).eq('id', op.id)
+    throwIf(error)
+  } else if (op.type === 'delete') {
+    const { error } = await supabase.from(op.table).delete().eq('id', op.id)
+    throwIf(error)
+  }
+}
+
 export function StoreProvider({ children }) {
+  const toast = useToast()
   const [authUser, setAuthUser] = useState(undefined) // undefined = 尚未得知
-  const [users, setUsers] = useState([])
-  const [raw, setRaw] = useState(EMPTY)
+  const [users, setUsers] = useState(() => readJSON(USERS_KEY, []))
+  const [raw, setRawState] = useState(EMPTY)
   const [ready, setReady] = useState(false)
   const [fatal, setFatal] = useState(null)
   const [attempt, setAttempt] = useState(0) // 載入失敗後「重試」用
+  const [outbox, setOutboxState] = useState(() => readJSON(OUTBOX_KEY, []))
+  const [offline, setOffline] = useState(typeof navigator !== 'undefined' && navigator.onLine === false)
+  const [syncing, setSyncing] = useState(false)
   const refreshTimer = useRef(null)
+  const rawRef = useRef(raw)
+  const outboxRef = useRef(outbox)
+  const flushing = useRef(false)
+  const authRef = useRef(null)
+
+  const setRaw = useCallback((next) => {
+    setRawState((prev) => {
+      const value = typeof next === 'function' ? next(prev) : next
+      rawRef.current = value
+      if (authRef.current) writeJSON(cacheKey(authRef.current.id), value)
+      return value
+    })
+  }, [])
+  const setOutbox = useCallback((next) => {
+    const value = typeof next === 'function' ? next(outboxRef.current) : next
+    outboxRef.current = value
+    writeJSON(OUTBOX_KEY, value)
+    setOutboxState(value)
+  }, [])
 
   // ---------- Auth ----------
   useEffect(() => {
@@ -76,6 +146,7 @@ export function StoreProvider({ children }) {
       return
     }
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      authRef.current = session?.user ?? null
       setAuthUser(session?.user ?? null)
     })
     return () => data.subscription.unsubscribe()
@@ -92,7 +163,7 @@ export function StoreProvider({ children }) {
     setRaw(EMPTY)
     setFatal(null)
     await supabase?.auth.signOut()
-  }, [])
+  }, [setRaw])
 
   /** 載入失敗(例如離線)時重試,不登出、不清 session */
   const retry = useCallback(() => {
@@ -101,8 +172,7 @@ export function StoreProvider({ children }) {
   }, [])
 
   // ---------- 讀取 ----------
-  const refresh = useCallback(async () => {
-    if (!supabase || !authUser) return
+  const fetchAll = useCallback(async () => {
     // 週期任務「過期即丟」的結算:資料庫每天凌晨 3 點由 pg_cron 執行,這裡是開 App 時的備援(冪等)
     await supabase.rpc('rollover_recurring_tasks').then(() => {}, () => {})
     const [t, l, r, d, c, p] = await Promise.all([
@@ -114,18 +184,85 @@ export function StoreProvider({ children }) {
       supabase.from('task_presets').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
     ])
     throwIf(t.error || l.error || r.error || d.error || c.error || p.error)
-    setRaw({ tasks: t.data, ledger: l.data, rewards: r.data, redemptions: d.data, categories: c.data, presets: p.data })
-  }, [authUser])
+    return { tasks: t.data, ledger: l.data, rewards: r.data, redemptions: d.data, categories: c.data, presets: p.data }
+  }, [])
+
+  /** 重新抓取;若還有未同步的操作,先不覆蓋本機狀態(等 flush 完成後再抓) */
+  const refresh = useCallback(async () => {
+    if (!supabase || !authRef.current) return
+    if (outboxRef.current.length > 0) return
+    const data = await fetchAll()
+    if (outboxRef.current.length > 0) return // 抓取期間又有新操作:以本機為準
+    setRaw(data)
+    setOffline(false)
+  }, [fetchAll, setRaw])
+
+  // ---------- 同步 outbox ----------
+  const flush = useCallback(async () => {
+    if (flushing.current || !supabase || !authRef.current) return
+    if (outboxRef.current.length === 0) return
+    flushing.current = true
+    setSyncing(true)
+    let needRefresh = false
+    try {
+      while (outboxRef.current.length > 0) {
+        const op = outboxRef.current[0]
+        try {
+          await execOp(op)
+          setOutbox((q) => q.filter((x) => x.id !== op.id))
+          setOffline(false)
+          needRefresh = true
+        } catch (err) {
+          if (isNetworkError(err)) {
+            setOffline(true)
+            break // 連不上:保留,稍後重送
+          }
+          // 伺服器拒絕(例如積分不足、狀態不對):丟棄這筆並提示,之後重抓校正
+          setOutbox((q) => q.filter((x) => x.id !== op.id))
+          toast.error(`同步失敗,已還原:${err.message || err}`)
+          needRefresh = true
+        }
+      }
+    } finally {
+      flushing.current = false
+      setSyncing(false)
+    }
+    if (needRefresh) await refresh().catch(() => {})
+  }, [setOutbox, refresh, toast])
 
   const scheduleRefresh = useCallback(() => {
     clearTimeout(refreshTimer.current)
-    refreshTimer.current = setTimeout(() => refresh().catch(() => {}), 300)
-  }, [refresh])
+    refreshTimer.current = setTimeout(() => {
+      if (outboxRef.current.length > 0) flush().catch(() => {})
+      else refresh().catch(() => {})
+    }, 300)
+  }, [refresh, flush])
 
-  // 登入後:載入使用者對照表 + 全部資料,並訂閱 Realtime
+  /** 先套用到本機、寫進 outbox,再背景同步 */
+  const mutate = useCallback(
+    (op) => {
+      const full = { id: newId(), ...op }
+      setRaw((prev) => applyLocal(prev, full, { userId: authRef.current?.id }))
+      setOutbox((q) => [...q, full])
+      setTimeout(() => flush().catch(() => {}), 0)
+    },
+    [setRaw, setOutbox, flush],
+  )
+
+  // 登入後:先用快取顯示,再載入使用者對照表 + 全部資料,並訂閱 Realtime
   useEffect(() => {
     if (!authUser) return
+    authRef.current = authUser
     let cancelled = false
+
+    const cached = readJSON(cacheKey(authUser.id), null)
+    const cachedUsers = readJSON(USERS_KEY, [])
+    if (cached && cachedUsers.some((u) => u.id === authUser.id)) {
+      rawRef.current = cached
+      setRawState(cached)
+      setUsers(cachedUsers)
+      setReady(true)
+    }
 
     ;(async () => {
       try {
@@ -137,13 +274,16 @@ export function StoreProvider({ children }) {
           return
         }
         setUsers(list)
-        await refresh()
+        writeJSON(USERS_KEY, list)
+        if (outboxRef.current.length > 0) await flush()
+        else await refresh()
         if (!cancelled) setReady(true)
       } catch (e) {
-        if (!cancelled) {
-          const offline = typeof navigator !== 'undefined' && navigator.onLine === false
-          setFatal(offline ? '目前離線,連上網路後請重試。' : `載入資料失敗:${e.message || '未知錯誤'}`)
-        }
+        if (cancelled) return
+        const isOffline = isNetworkError(e)
+        setOffline(isOffline)
+        // 有快取就照常使用(離線模式),沒有才顯示錯誤
+        if (!cached) setFatal(isOffline ? '目前離線,連上網路後請重試。' : `載入資料失敗:${e.message || '未知錯誤'}`)
       }
     })()
 
@@ -154,8 +294,12 @@ export function StoreProvider({ children }) {
     channel.subscribe()
 
     const onVisible = () => document.visibilityState === 'visible' && scheduleRefresh()
+    const onOnline = () => { setOffline(false); scheduleRefresh() }
+    const onOffline = () => setOffline(true)
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
     const poll = setInterval(scheduleRefresh, POLL_MS)
 
     return () => {
@@ -164,9 +308,11 @@ export function StoreProvider({ children }) {
       clearInterval(poll)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
       supabase.removeChannel(channel)
     }
-  }, [authUser, refresh, scheduleRefresh, attempt])
+  }, [authUser, refresh, flush, scheduleRefresh, attempt])
 
   // ---------- 對照與正規化 ----------
   const me = users.find((u) => u.id === authUser?.id) ?? null
@@ -184,7 +330,7 @@ export function StoreProvider({ children }) {
   const categories = useMemo(() => {
     const byId = Object.fromEntries(raw.categories.map((c) => [c.id, { ...c }]))
     Object.values(byId).forEach((c) => { c.parent = c.parent_id ? byId[c.parent_id] ?? null : null })
-    return Object.values(byId).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
+    return Object.values(byId).sort((a, b) => a.sort_order - b.sort_order || String(a.created_at).localeCompare(String(b.created_at)))
   }, [raw.categories])
   const categoriesById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories])
 
@@ -267,15 +413,17 @@ export function StoreProvider({ children }) {
   )
 
   // ---------- 寫入:共用 ----------
-  const rpc = useCallback(
-    async (fn, args) => {
-      const { data, error } = await supabase.rpc(fn, args)
-      throwIf(error)
-      await refresh()
-      return data
+  const rpc = useCallback((fn, args) => mutate({ type: 'rpc', fn, args }), [mutate])
+  const insertRow = useCallback(
+    (table, row) => {
+      const full = { id: newId(), ...row }
+      mutate({ type: 'insert', table, row: full })
+      return full
     },
-    [refresh],
+    [mutate],
   )
+  const updateRow = useCallback((table, id, row) => mutate({ type: 'update', table, id, row }), [mutate])
+  const deleteRow = useCallback((table, id) => mutate({ type: 'delete', table, id }), [mutate])
 
   // ---------- 寫入:任務 ----------
   /** 選項清單:去除空白、空字串,沒有選項就回 null(對應資料庫欄位) */
@@ -325,59 +473,41 @@ export function StoreProvider({ children }) {
   )
 
   const createTask = useCallback(
-    async (input) => {
-      const row = { ...toTaskRow(input), created_by: userId, status: 'pending' }
-      const { data, error } = await supabase.from('tasks').insert(row).select().single()
-      throwIf(error)
-      await refresh()
-      return data
-    },
-    [toTaskRow, userId, refresh],
+    async (input) => insertRow('tasks', { ...toTaskRow(input), created_by: userId, status: 'pending' }),
+    [toTaskRow, userId, insertRow],
   )
-
-  const updateTask = useCallback(
-    async (id, input) => {
-      const { error } = await supabase.from('tasks').update(toTaskRow(input)).eq('id', id)
-      throwIf(error)
-      await refresh()
-    },
-    [toTaskRow, refresh],
-  )
-
+  const updateTask = useCallback(async (id, input) => updateRow('tasks', id, toTaskRow(input)), [toTaskRow, updateRow])
   /** 編輯整個系列:所有進行中的期別一起更新內容與規則(範本一併更新) */
   const updateSeries = useCallback(
     async (id, input) => {
       const { due_date: _due, recurrence_rule, ...fields } = toTaskRow(input)
-      const { data, error } = await supabase.rpc('update_series', { p_task_id: id, p_fields: fields, p_rule: recurrence_rule })
-      throwIf(error)
-      await refresh()
-      return data
+      rpc('update_series', { p_task_id: id, p_fields: fields, p_rule: recurrence_rule })
+      const t = tasksById[id]
+      const root = t ? t.parent_task_id ?? t.id : id
+      return tasks.filter((x) => (x.parent_task_id ?? x.id) === root && (x.status === 'pending' || x.status === 'rejected')).length
     },
-    [toTaskRow, refresh],
+    [toTaskRow, rpc, tasks, tasksById],
   )
-
   const deleteTask = useCallback(
     async (id) => {
       const task = tasksById[id]
-      const { error } = await supabase.from('tasks').delete().eq('id', id)
-      throwIf(error)
+      deleteRow('tasks', id)
       if (task?.image_urls?.length) deleteImages(task.image_urls).catch(() => {})
-      await refresh()
     },
-    [tasksById, refresh],
+    [tasksById, deleteRow],
   )
 
   const submitTask = useCallback(
-    (id, choice, note) => rpc('submit_task', { p_task_id: id, p_choice: choice ?? null, p_note: note ?? null }),
+    async (id, choice, note) => rpc('submit_task', { p_task_id: id, p_choice: choice ?? null, p_note: note ?? null }),
     [rpc],
   )
   /** 修改任務(每日任務每一期)的說明 */
-  const setTaskNote = useCallback((id, note) => rpc('set_task_note', { p_task_id: id, p_note: note ?? '' }), [rpc])
-  const approveTask = useCallback((id) => rpc('approve_task', { p_task_id: id }), [rpc])
+  const setTaskNote = useCallback(async (id, note) => rpc('set_task_note', { p_task_id: id, p_note: note ?? '' }), [rpc])
+  const approveTask = useCallback(async (id) => rpc('approve_task', { p_task_id: id }), [rpc])
   /** 撤回自己送出的審核:回到待完成,可再編輯 */
-  const withdrawTask = useCallback((id) => rpc('withdraw_task', { p_task_id: id }), [rpc])
-  const rejectTask = useCallback((id, reason) => rpc('reject_task', { p_task_id: id, p_reason: reason ?? '' }), [rpc])
-  const stopRecurrence = useCallback((id) => rpc('stop_recurrence', { p_task_id: id }), [rpc])
+  const withdrawTask = useCallback(async (id) => rpc('withdraw_task', { p_task_id: id }), [rpc])
+  const rejectTask = useCallback(async (id, reason) => rpc('reject_task', { p_task_id: id, p_reason: reason ?? '' }), [rpc])
+  const stopRecurrence = useCallback(async (id) => rpc('stop_recurrence', { p_task_id: id }), [rpc])
 
   // ---------- 寫入:獎勵與兌換 ----------
   const toRewardRow = (input) => ({
@@ -392,28 +522,23 @@ export function StoreProvider({ children }) {
   })
 
   const createReward = useCallback(
-    async (input) => {
-      const { data, error } = await supabase.from('rewards').insert({ ...toRewardRow(input), created_by: userId }).select().single()
-      throwIf(error)
-      await refresh()
-      return data
-    },
-    [userId, refresh],
+    async (input) => insertRow('rewards', { ...toRewardRow(input), created_by: userId }),
+    [userId, insertRow],
   )
+  const updateReward = useCallback(async (id, input) => updateRow('rewards', id, toRewardRow(input)), [updateRow])
 
-  const updateReward = useCallback(
-    async (id, input) => {
-      const { error } = await supabase.from('rewards').update(toRewardRow(input)).eq('id', id)
-      throwIf(error)
-      await refresh()
+  const requestRedemption = useCallback(
+    async (rewardId) => {
+      const r = rewardsById[rewardId]
+      if (r && r.redeemable === false) throw new Error('這個獎勵不開放積分兌換')
+      if (r && balanceOf(user) - reservedOf(user) < r.cost_points) throw new Error('積分不足')
+      rpc('request_redemption', { p_reward_id: rewardId })
     },
-    [refresh],
+    [rpc, rewardsById, balanceOf, reservedOf, user],
   )
-
-  const requestRedemption = useCallback((rewardId) => rpc('request_redemption', { p_reward_id: rewardId }), [rpc])
-  const fulfillRedemption = useCallback((id) => rpc('fulfill_redemption', { p_redemption_id: id }), [rpc])
+  const fulfillRedemption = useCallback(async (id) => rpc('fulfill_redemption', { p_redemption_id: id }), [rpc])
   const rejectRedemption = useCallback(
-    (id, reason) => rpc('reject_redemption', { p_redemption_id: id, p_reason: reason ?? '' }),
+    async (id, reason) => rpc('reject_redemption', { p_redemption_id: id, p_reason: reason ?? '' }),
     [rpc],
   )
 
@@ -422,34 +547,18 @@ export function StoreProvider({ children }) {
   const createCategory = useCallback(
     async ({ kind, name, parent_id = null }) => {
       const sort_order = categories.filter((c) => c.kind === kind && (c.parent_id ?? null) === parent_id).length
-      const { data, error } = await supabase
-        .from('categories')
-        .insert({ kind, name: name.trim(), parent_id, sort_order, created_by: userId })
-        .select()
-        .single()
-      throwIf(error)
-      await refresh()
-      return data
+      return insertRow('categories', { kind, name: name.trim(), parent_id, sort_order, created_by: userId })
     },
-    [categories, userId, refresh],
+    [categories, userId, insertRow],
   )
-
-  const updateCategory = useCallback(
-    async (id, { name }) => {
-      const { error } = await supabase.from('categories').update({ name: name.trim() }).eq('id', id)
-      throwIf(error)
-      await refresh()
-    },
-    [refresh],
-  )
-
+  const updateCategory = useCallback(async (id, { name }) => updateRow('categories', id, { name: name.trim() }), [updateRow])
   const deleteCategory = useCallback(
     async (id) => {
-      const { error } = await supabase.from('categories').delete().eq('id', id)
-      throwIf(error)
-      await refresh()
+      // 主類別刪除時連同次類別(資料庫 on delete cascade;本機先一起拿掉)
+      categories.filter((c) => c.parent_id === id).forEach((c) => deleteRow('categories', c.id))
+      deleteRow('categories', id)
     },
-    [refresh],
+    [categories, deleteRow],
   )
 
   // ---------- 寫入:快捷任務 ----------
@@ -467,37 +576,11 @@ export function StoreProvider({ children }) {
   })
 
   const createPreset = useCallback(
-    async (input) => {
-      const sort_order = presets.length
-      const { data, error } = await supabase
-        .from('task_presets')
-        .insert({ ...toPresetRow(input), sort_order, created_by: userId })
-        .select()
-        .single()
-      throwIf(error)
-      await refresh()
-      return data
-    },
-    [presets.length, userId, refresh],
+    async (input) => insertRow('task_presets', { ...toPresetRow(input), sort_order: presets.length, created_by: userId }),
+    [presets.length, userId, insertRow],
   )
-
-  const updatePreset = useCallback(
-    async (id, input) => {
-      const { error } = await supabase.from('task_presets').update(toPresetRow(input)).eq('id', id)
-      throwIf(error)
-      await refresh()
-    },
-    [refresh],
-  )
-
-  const deletePreset = useCallback(
-    async (id) => {
-      const { error } = await supabase.from('task_presets').delete().eq('id', id)
-      throwIf(error)
-      await refresh()
-    },
-    [refresh],
-  )
+  const updatePreset = useCallback(async (id, input) => updateRow('task_presets', id, toPresetRow(input)), [updateRow])
+  const deletePreset = useCallback(async (id) => deleteRow('task_presets', id), [deleteRow])
 
   const value = useMemo(
     () => ({
@@ -514,6 +597,11 @@ export function StoreProvider({ children }) {
       logout,
       retry,
       refresh,
+      // 同步狀態
+      pending: outbox.length,
+      offline,
+      syncing,
+      sync: flush,
       tasks,
       ledger,
       rewards,
@@ -547,6 +635,7 @@ export function StoreProvider({ children }) {
     }),
     [
       authUser, user, userId, users, nameOf, ready, fatal, login, logout, retry, refresh,
+      outbox.length, offline, syncing, flush,
       tasks, ledger, rewards, redemptions, categories, categoriesById, presets, createPreset, updatePreset, deletePreset, balanceOf, reservedOf,
       createTask, updateTask, updateSeries, deleteTask, submitTask, setTaskNote, approveTask, withdrawTask, rejectTask, stopRecurrence,
       createReward, updateReward, requestRedemption, fulfillRedemption, rejectRedemption,

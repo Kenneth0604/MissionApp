@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { isDaily, isReviewer, isTodoFor, otherUser, useStore } from '../lib/store.jsx'
 
 export default function Layout() {
-  const { user, nameOf, tasks, redemptions } = useStore()
+  const { user, nameOf, tasks, redemptions, pending, offline, syncing, sync } = useStore()
 
   const todo = tasks.filter((t) => !isDaily(t) && isTodoFor(t, user)).length
   const review = tasks.filter((t) => !isDaily(t) && isReviewer(t, user)).length
@@ -31,6 +31,17 @@ export default function Layout() {
           </div>
         </div>
       </header>
+
+      {(pending > 0 || offline) && (
+        <button
+          onClick={() => sync()}
+          className={`flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-medium ${offline ? 'bg-warning-soft text-warning' : 'bg-info-soft text-info'}`}
+        >
+          {offline ? '📴 目前離線' : syncing ? '⏳ 同步中' : '⏳ 等待同步'}
+          {pending > 0 && ` · ${pending} 筆已暫存在本機`}
+          {offline && pending > 0 && ',連線後會自動送出'}
+        </button>
+      )}
 
       <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4">
         <Outlet />
