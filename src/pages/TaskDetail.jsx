@@ -13,7 +13,7 @@ export default function TaskDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, nameOf, tasks, submitTask, approveTask, rejectTask, deleteTask, stopRecurrence } = useStore()
+  const { user, nameOf, tasks, submitTask, approveTask, withdrawTask, rejectTask, deleteTask, stopRecurrence } = useStore()
   const task = tasks.find((t) => t.id === id)
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
@@ -29,7 +29,9 @@ export default function TaskDetail() {
   const needsChoice = (canSubmit || canHelpOut) && task.choices?.length > 0
   const canReview = isReviewer(task, user)
   const reviewer = reviewerOf(task)
-  const canEdit = isCreator && task.status === 'pending'
+  // 任一方都可編輯 / 刪除待完成或已退回的任務;待審核的要先由送出者撤回
+  const canEdit = task.status === 'pending' || task.status === 'rejected'
+  const canWithdraw = task.status === 'submitted' && task.completed_by === user
   const recurrence = describeRecurrence(task.recurrence_rule)
   const recurrenceActive = task.recurrence_rule && task.recurrence_rule.active !== false
   const helped = isHelped(task)
@@ -178,7 +180,17 @@ export default function TaskDetail() {
         </div>
       )}
 
-      {isCreator && (canEdit || recurrenceActive) && (
+      {canWithdraw && (
+        <button
+          onClick={() => confirm('撤回後任務回到「待完成」,可以再編輯或重新標記完成。確定?') && run(() => withdrawTask(task.id), '已撤回,任務回到待完成')}
+          disabled={busy}
+          className="btn-secondary w-full"
+        >
+          ↩ 撤回審核
+        </button>
+      )}
+
+      {(canEdit || recurrenceActive) && (
         <div className="flex flex-wrap gap-2 text-sm">
           {canEdit && (
             <>

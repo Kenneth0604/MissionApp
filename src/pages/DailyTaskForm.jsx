@@ -60,7 +60,9 @@ export default function DailyTaskForm() {
   const [busy, setBusy] = useState(false)
 
   if (id && !editing) return <p className="text-muted">找不到這個每日任務</p>
-  if (editing && editing.created_by !== user) return <p className="text-muted">只有建立者能編輯這個系列</p>
+  if (editing && !(editing.status === 'pending' || editing.status === 'rejected')) {
+    return <p className="text-muted">只有「待完成」或「已退回」的期別可以編輯。</p>
+  }
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
   const patch = (obj) => setForm((f) => ({ ...f, ...obj }))

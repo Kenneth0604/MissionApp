@@ -369,6 +369,8 @@ export function StoreProvider({ children }) {
 
   const submitTask = useCallback((id, choice) => rpc('submit_task', { p_task_id: id, p_choice: choice ?? null }), [rpc])
   const approveTask = useCallback((id) => rpc('approve_task', { p_task_id: id }), [rpc])
+  /** 撤回自己送出的審核:回到待完成,可再編輯 */
+  const withdrawTask = useCallback((id) => rpc('withdraw_task', { p_task_id: id }), [rpc])
   const rejectTask = useCallback((id, reason) => rpc('reject_task', { p_task_id: id, p_reason: reason ?? '' }), [rpc])
   const stopRecurrence = useCallback((id) => rpc('stop_recurrence', { p_task_id: id }), [rpc])
 
@@ -524,6 +526,7 @@ export function StoreProvider({ children }) {
       deleteTask,
       submitTask,
       approveTask,
+      withdrawTask,
       rejectTask,
       stopRecurrence,
       createReward,
@@ -538,7 +541,7 @@ export function StoreProvider({ children }) {
     [
       authUser, user, userId, users, nameOf, ready, fatal, login, logout, retry, refresh,
       tasks, ledger, rewards, redemptions, categories, categoriesById, presets, createPreset, updatePreset, deletePreset, balanceOf, reservedOf,
-      createTask, updateTask, updateSeries, deleteTask, submitTask, approveTask, rejectTask, stopRecurrence,
+      createTask, updateTask, updateSeries, deleteTask, submitTask, approveTask, withdrawTask, rejectTask, stopRecurrence,
       createReward, updateReward, requestRedemption, fulfillRedemption, rejectRedemption,
       createCategory, updateCategory, deleteCategory,
     ],

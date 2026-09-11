@@ -51,9 +51,9 @@ export default function TaskForm() {
   const [busy, setBusy] = useState(false)
 
   if (id && !editing) return <p className="text-muted">找不到這個任務</p>
-  if (editing && (editing.created_by !== user || editing.status !== 'pending')) {
-    // 只有建立者能在待完成狀態編輯
-    return <p className="text-muted">只有建立者能在「待完成」狀態下編輯任務</p>
+  if (editing && !(editing.status === 'pending' || editing.status === 'rejected')) {
+    // 待審核的任務要先撤回;已核准的不可編輯
+    return <p className="text-muted">只有「待完成」或「已退回」的任務可以編輯;待審核的請先撤回。</p>
   }
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
