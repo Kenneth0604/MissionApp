@@ -39,6 +39,7 @@ export default function TaskCard({ task }) {
           </div>
         </div>
       </div>
+      {task.note && <p className="mt-2 truncate text-xs text-ink/80">📝 {task.note}</p>}
       {(task.due_date || (task.status === 'rejected' && task.reject_reason)) && (
         <div className="mt-2 flex flex-wrap gap-x-3 text-xs">
           {task.due_date && (

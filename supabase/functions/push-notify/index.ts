@@ -102,6 +102,11 @@ async function buildNotices(p: WebhookPayload): Promise<Notice[]> {
     }
 
     if (p.type === 'UPDATE' && p.old_record && p.old_record.status !== rec.status) {
+      // 每日任務完成即核准(不經 submitted):通知另一個人
+      if (rec.status === 'approved' && p.old_record.status !== 'submitted' && rec.recurrence_rule) {
+        const body = `${name(doer)} 完成了每日任務「${rec.title}」${rec.chosen_choice ? `(${rec.chosen_choice})` : ''}${rec.note ? `:${rec.note}` : ''}`
+        return Object.keys(users).filter((id) => id !== doer).map((to) => ({ to, title: '📅 每日任務完成', body, url, tag }))
+      }
       switch (rec.status) {
         case 'submitted':
           return reviewers.filter((to) => to && to !== doer).map((to) => ({ to, title: '⏳ 任務待審核', body: `${name(doer)} 完成了「${rec.title}」,請審核`, url, tag }))

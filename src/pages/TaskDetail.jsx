@@ -13,12 +13,14 @@ export default function TaskDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, nameOf, tasks, submitTask, approveTask, withdrawTask, rejectTask, deleteTask, stopRecurrence } = useStore()
+  const { user, nameOf, tasks, submitTask, setTaskNote, approveTask, withdrawTask, rejectTask, deleteTask, stopRecurrence } = useStore()
   const task = tasks.find((t) => t.id === id)
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [choice, setChoice] = useState('')
+  const [note, setNote] = useState(() => task?.note ?? '')
+  const [editingNote, setEditingNote] = useState(false)
 
   if (!task) return <p className="text-muted">找不到這個任務(可能已被刪除)</p>
 
@@ -36,6 +38,7 @@ export default function TaskDetail() {
   const recurrenceActive = task.recurrence_rule && task.recurrence_rule.active !== false
   const helped = isHelped(task)
   const doubled = helped && task.reward_type === 'points'
+  const isDailyTask = Boolean(task.recurrence_rule) // 每日任務:完成即核准,不需審核;每一期可寫說明
 
   async function run(fn, okMsg) {
     setBusy(true)
@@ -57,7 +60,17 @@ export default function TaskDetail() {
 
   function onSubmit() {
     if (needsChoice && !choice) return toast.error('請選一個選項')
-    run(() => submitTask(task.id, choice || undefined), '已送出,等待審核')
+    run(
+      () => submitTask(task.id, choice || undefined, isDailyTask ? note : undefined),
+      isDailyTask ? '已完成 ✓' : '已送出,等待審核',
+    )
+  }
+
+  function onSaveNote() {
+    run(async () => {
+      await setTaskNote(task.id, note)
+      setEditingNote(false)
+    }, '說明已更新')
   }
 
   function onDelete() {
@@ -116,6 +129,27 @@ export default function TaskDetail() {
           <Item label="最後更新" value={formatDateTime(task.updated_at)} />
         </dl>
 
+        {(task.note || (isDailyTask && task.status === 'approved')) && (
+          <div className="mt-4 rounded-xl bg-surface-2 p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-ink">📝 這一期的說明</span>
+              {isDailyTask && !editingNote && (
+                <button type="button" onClick={() => { setNote(task.note ?? ''); setEditingNote(true) }} className="text-xs text-primary">✎ 修改</button>
+              )}
+            </div>
+            {editingNote ? (
+              <div className="mt-2 space-y-2">
+                <textarea autoFocus rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="今天做了什麼、練了多久…" className="input" />
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setEditingNote(false)} className="btn-secondary py-2 text-sm">取消</button>
+                  <button type="button" onClick={onSaveNote} disabled={busy} className="btn-primary py-2 text-sm">儲存</button>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-1 whitespace-pre-wrap text-ink/90">{task.note || <span className="text-muted">還沒有寫說明</span>}</p>
+            )}
+          </div>
+        )}
         {task.status === 'rejected' && task.reject_reason && (
           <div className="mt-4 rounded-xl bg-danger-soft p-3 text-sm text-danger">
             <span className="font-semibold">退回原因:</span>{task.reject_reason}
@@ -149,9 +183,16 @@ export default function TaskDetail() {
         </div>
       )}
 
+      {isDailyTask && (canSubmit || canHelpOut) && (
+        <div className="card space-y-2 p-4">
+          <p className="label">今天的說明(選填)</p>
+          <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如:練了 30 分鐘音階" className="input" />
+        </div>
+      )}
+
       {canSubmit && (
         <button onClick={onSubmit} disabled={busy || (needsChoice && !choice)} className="btn-success w-full py-3.5 text-lg">
-          ✓ 標記完成{choice && ` · ${choice}`}
+          ✓ {isDailyTask ? '完成(不需審核)' : '標記完成'}{choice && ` · ${choice}`}
         </button>
       )}
 
