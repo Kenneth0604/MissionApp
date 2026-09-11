@@ -65,6 +65,7 @@ export default function TaskForm() {
       description: p.description,
       category_id: p.category_id || '',
       priority: p.priority,
+      ...(p.assigned_to ? { assigned_to: p.assigned_to } : {}),
       reward_type: p.reward_type,
       reward_points: p.reward_points,
       reward_id: p.reward_id || '',

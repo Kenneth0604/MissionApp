@@ -226,11 +226,13 @@ export function StoreProvider({ children }) {
     () =>
       raw.presets.map((p) => ({
         ...p,
+        assigned_to_id: p.assigned_to,
+        assigned_to: p.shared ? 'both' : p.assigned_to ? codeOf(p.assigned_to) : null,
         choices: p.choices ?? [],
         reward: p.reward_id ? rewardsById[p.reward_id] ?? null : null,
         category: p.category_id ? categoriesById[p.category_id] ?? null : null,
       })),
-    [raw.presets, rewardsById, categoriesById],
+    [raw.presets, rewardsById, categoriesById, codeOf],
   )
 
   const ledger = useMemo(
@@ -447,6 +449,8 @@ export function StoreProvider({ children }) {
     title: input.title.trim(),
     description: input.description?.trim() ?? '',
     category_id: input.category_id || null,
+    assigned_to: input.assigned_to && input.assigned_to !== 'both' ? idOf(input.assigned_to) : null,
+    shared: input.assigned_to === 'both',
     priority: Math.min(5, Math.max(1, Number(input.priority) || 3)),
     choices: normalizeChoices(input.choices),
     reward_type: input.reward_type ?? 'points',

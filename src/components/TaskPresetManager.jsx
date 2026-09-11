@@ -1,17 +1,17 @@
 import { useState } from 'react'
-import { useStore } from '../lib/store.jsx'
+import { otherUser, useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
 import CategoryPicker from './CategoryPicker.jsx'
 import { PRIORITIES, DEFAULT_PRIORITY, priorityOf } from '../lib/priority.js'
 
 const emptyForm = {
-  title: '', category_id: '', priority: DEFAULT_PRIORITY, choices: [],
+  title: '', category_id: '', priority: DEFAULT_PRIORITY, choices: [], assigned_to: '',
   reward_type: 'points', reward_points: 10, reward_id: '',
 }
 
 /** 設定頁:管理快捷任務(建立任務時可直接套用的範本) */
 export default function TaskPresetManager() {
-  const { presets, rewards, createPreset, updatePreset, deletePreset } = useStore()
+  const { user, nameOf, presets, rewards, createPreset, updatePreset, deletePreset } = useStore()
   const toast = useToast()
   const activeRewards = rewards.filter((r) => r.is_active)
   const [editingId, setEditingId] = useState(null) // null = 沒在編輯;'new' = 新增中
@@ -20,10 +20,10 @@ export default function TaskPresetManager() {
   const [busy, setBusy] = useState(false)
 
   const patch = (obj) => setForm((f) => ({ ...f, ...obj }))
-  const startNew = () => { setForm(emptyForm); setChoiceInput(''); setEditingId('new') }
+  const startNew = () => { setForm({ ...emptyForm, assigned_to: otherUser(user) }); setChoiceInput(''); setEditingId('new') }
   const startEdit = (p) => {
     setForm({
-      title: p.title, category_id: p.category_id ?? '', priority: p.priority,
+      title: p.title, category_id: p.category_id ?? '', priority: p.priority, assigned_to: p.assigned_to ?? '',
       choices: p.choices ?? [], reward_type: p.reward_type, reward_points: p.reward_points, reward_id: p.reward_id ?? '',
     })
     setChoiceInput('')
@@ -71,7 +71,7 @@ export default function TaskPresetManager() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-ink">{p.title}</p>
                 <p className="truncate text-xs text-muted">
-                  {p.category?.name ?? '未分類'} · {priorityOf(p.priority).label}
+                  {p.assigned_to === 'both' ? '👥 共同' : p.assigned_to ? `→ ${nameOf(p.assigned_to)}` : '未指定對象'} · {p.category?.name ?? '未分類'} · {priorityOf(p.priority).label}
                   {p.reward_type === 'points' && p.reward_points > 0 && ` · +${p.reward_points} 積分`}
                   {p.reward_type === 'reward' && p.reward && ` · 🎁 ${p.reward.name}`}
                   {p.choices?.length > 0 && ` · 多選項 ${p.choices.length} 個`}
@@ -91,6 +91,20 @@ export default function TaskPresetManager() {
           <input value={form.title} onChange={(e) => patch({ title: e.target.value })} placeholder="標題,例如:倒垃圾" className="input" autoFocus />
 
           <CategoryPicker kind="task" value={form.category_id} onChange={(v) => patch({ category_id: v })} />
+
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-muted">指派給</p>
+            <div className="grid grid-cols-3 gap-2">
+              {['A', 'B'].map((u) => (
+                <button type="button" key={u} onClick={() => patch({ assigned_to: u })} className={`chip py-1.5 text-sm ${form.assigned_to === u ? 'chip-active' : ''}`}>
+                  {nameOf(u)}{u === user && '(自己)'}
+                </button>
+              ))}
+              <button type="button" onClick={() => patch({ assigned_to: 'both' })} className={`chip py-1.5 text-sm ${form.assigned_to === 'both' ? 'chip-active' : ''}`}>
+                👥 共同
+              </button>
+            </div>
+          </div>
 
           <div className="flex flex-wrap gap-2">
             {PRIORITIES.map((pr) => (

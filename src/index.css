@@ -20,6 +20,8 @@
   --color-success-soft: var(--t-success-soft);
   --color-danger: var(--t-danger);
   --color-danger-soft: var(--t-danger-soft);
+  --color-urgent: var(--t-urgent);
+  --color-urgent-soft: var(--t-urgent-soft);
   --color-warning: var(--t-warning);
   --color-warning-soft: var(--t-warning-soft);
   --color-info: var(--t-info);
@@ -45,6 +47,8 @@
   --t-success-soft: #d8f5ea;
   --t-danger: #e0335f;
   --t-danger-soft: #ffe1ea;
+  --t-urgent: #d90f0f;          /* 純正紅,與粉紅主色明顯區分 */
+  --t-urgent-soft: #ffd6d6;
   --t-warning: #d98a1a;
   --t-warning-soft: #fdf0d6;
   --t-info: #7c5cd6;
@@ -71,6 +75,8 @@
   --t-success-soft: #14321f;
   --t-danger: #fb7185;
   --t-danger-soft: #45202a;
+  --t-urgent: #ff3b30;
+  --t-urgent-soft: #4a1414;
   --t-warning: #fbbf24;
   --t-warning-soft: #3f2f0c;
   --t-info: #93c5fd;
