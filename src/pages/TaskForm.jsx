@@ -119,7 +119,7 @@ export default function TaskForm() {
               type="button"
               key={p.value}
               onClick={() => patch({ priority: p.value })}
-              className={`chip py-2 ${form.priority === p.value ? 'chip-active' : p.cls}`}
+              className={`chip py-2 ${form.priority === p.value ? `${p.solid} font-bold shadow` : p.cls}`}
             >
               {p.label}
             </button>

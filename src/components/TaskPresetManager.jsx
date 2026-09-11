@@ -94,7 +94,7 @@ export default function TaskPresetManager() {
 
           <div className="flex flex-wrap gap-2">
             {PRIORITIES.map((pr) => (
-              <button type="button" key={pr.value} onClick={() => patch({ priority: pr.value })} className={`chip py-1.5 text-sm ${form.priority === pr.value ? 'chip-active' : pr.cls}`}>
+              <button type="button" key={pr.value} onClick={() => patch({ priority: pr.value })} className={`chip py-1.5 text-sm ${form.priority === pr.value ? `${pr.solid} font-bold shadow` : pr.cls}`}>
                 {pr.label}
               </button>
             ))}
