@@ -13,8 +13,8 @@ export default function Layout() {
     { to: '/', label: '首頁', icon: HomeIcon, end: true },
     { to: '/tasks', label: '任務', icon: TaskIcon, badge: todo + review },
     { to: '/daily', label: '每日', icon: CalendarIcon, badge: dailyBadge },
-    { to: '/rewards', label: '獎勵', icon: GiftIcon },
-    { to: '/redemptions', label: '兌換', icon: BagIcon, badge: pendingRedemptions },
+    { to: '/rewards', label: '獎勵', icon: GiftIcon, badge: pendingRedemptions },
+    { to: '/partner', label: nameOf(otherUser(user)), icon: UserIcon },
     { to: '/settings', label: '設定', icon: GearIcon },
   ]
 
@@ -23,12 +23,7 @@ export default function Layout() {
       <header className="pt-safe hero sticky top-0 z-10 text-white shadow">
         <div className="flex items-center justify-between px-4 py-3">
           <h1 className="text-lg font-bold tracking-wide">發任務用ㄉ東西</h1>
-          <div className="flex items-center gap-1.5">
-            <NavLink to="/partner" className={({ isActive }) => `rounded-full px-2.5 py-0.5 text-sm font-medium ${isActive ? 'bg-white text-primary' : 'bg-white/20'}`}>
-              👤 {nameOf(otherUser(user))}
-            </NavLink>
-            <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium">{nameOf(user)}</span>
-          </div>
+          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium">{nameOf(user)}</span>
         </div>
       </header>
 
@@ -106,10 +101,11 @@ function GiftIcon({ className }) {
     </svg>
   )
 }
-function BagIcon({ className }) {
+function UserIcon({ className }) {
   return (
     <svg className={className} {...svgProps}>
-      <path d="M5 8h14l-1 12H6L5 8zM9 8V6a3 3 0 016 0v2" />
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
     </svg>
   )
 }

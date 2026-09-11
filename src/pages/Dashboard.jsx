@@ -31,7 +31,7 @@ export default function Dashboard() {
       <section className="grid grid-cols-3 gap-3">
         <Stat to="/tasks?tab=mine" label="待完成" value={todo.length} cls="text-warning" />
         <Stat to="/tasks?tab=assigned" label="待我審核" value={toReview.length} cls="text-info" />
-        <Stat to="/redemptions" label="待確認兌換" value={toFulfill.length} cls="text-accent" />
+        <Stat to="/rewards?tab=redeem" label="待確認兌換" value={toFulfill.length} cls="text-accent" />
       </section>
 
       <div className="grid grid-cols-2 gap-3">
@@ -60,7 +60,7 @@ export default function Dashboard() {
           <h2 className="section-title">等待我確認交付 <span className="rounded-full bg-surface-2 px-2 text-xs text-muted">{toFulfill.length}</span></h2>
           <div className="space-y-2">
             {toFulfill.map((d) => (
-              <Link key={d.id} to="/redemptions" className="card flex items-center justify-between p-4">
+              <Link key={d.id} to="/rewards?tab=redeem" className="card flex items-center justify-between p-4">
                 <div>
                   <p className="font-semibold text-ink">{d.reward?.name ?? '獎勵'}</p>
                   <p className="text-xs text-muted">{nameOf(d.requested_by)} {d.source === 'task' ? '完成任務獲得' : '申請兌換'}</p>

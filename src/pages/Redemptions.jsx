@@ -14,7 +14,7 @@ export default function Redemptions() {
   const { user, nameOf, redemptions, fulfillRedemption, rejectRedemption } = useStore()
   const toast = useToast()
   const [params, setParams] = useSearchParams()
-  const tab = params.get('tab') === 'history' ? 'history' : 'pending'
+  const tab = params.get('view') === 'history' ? 'history' : 'pending'
   const [busyId, setBusyId] = useState(null)
 
   const list = redemptions.filter((d) => (tab === 'pending' ? d.status === 'requested' : d.status !== 'requested'))
@@ -52,7 +52,7 @@ export default function Redemptions() {
         {TABS.map((t) => (
           <button
             key={t.key}
-            onClick={() => setParams({ tab: t.key })}
+            onClick={() => setParams({ tab: 'redeem', view: t.key })}
             className={`flex-1 rounded-xl py-2 text-sm font-medium transition ${tab === t.key ? 'bg-surface text-primary shadow-sm' : 'text-muted'}`}
           >
             {t.label}

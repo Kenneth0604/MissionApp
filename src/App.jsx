@@ -50,7 +50,7 @@ export default function App() {
         <Route path="rewards" element={<Rewards />} />
         <Route path="rewards/new" element={<RewardForm />} />
         <Route path="rewards/:id/edit" element={<RewardForm />} />
-        <Route path="redemptions" element={<Redemptions />} />
+        <Route path="redemptions" element={<Navigate to="/rewards?tab=redeem" replace />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

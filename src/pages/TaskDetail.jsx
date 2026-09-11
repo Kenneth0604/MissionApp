@@ -160,7 +160,7 @@ export default function TaskDetail() {
         )}
         {task.status === 'approved' && task.reward_type === 'reward' && (
           <div className="mt-4 rounded-xl bg-success-soft p-3 text-sm text-success">
-            已核准,獎勵「{task.reward?.name}」已列入 <Link to="/redemptions" className="underline">兌換管理</Link> 待交付。
+            已核准,獎勵「{task.reward?.name}」已列入 <Link to="/rewards?tab=redeem" className="underline">兌換管理</Link> 待交付。
           </div>
         )}
         {canHelpOut && (

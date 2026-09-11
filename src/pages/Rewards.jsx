@@ -1,13 +1,37 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
 import CategoryFilter from '../components/CategoryFilter.jsx'
 import CategoryChip from '../components/CategoryChip.jsx'
 import ImageGallery from '../components/ImageGallery.jsx'
+import Redemptions from './Redemptions.jsx'
 import { matchesFilter } from '../lib/categories.js'
 
+/** 獎勵頁:上方分「獎勵目錄」與「兌換管理」兩個分頁 */
 export default function Rewards() {
+  const { user, redemptions } = useStore()
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'redeem' ? 'redeem' : 'catalog'
+  const pendingCount = redemptions.filter((d) => d.status === 'requested' && d.requested_by !== user).length
+
+  return (
+    <div className="space-y-4">
+      <div className="flex rounded-2xl bg-surface-2 p-1">
+        <button onClick={() => setParams({ tab: 'catalog' })} className={`flex-1 rounded-xl py-2 text-sm font-medium transition ${tab === 'catalog' ? 'bg-surface text-primary shadow-sm' : 'text-muted'}`}>
+          獎勵目錄
+        </button>
+        <button onClick={() => setParams({ tab: 'redeem' })} className={`relative flex-1 rounded-xl py-2 text-sm font-medium transition ${tab === 'redeem' ? 'bg-surface text-primary shadow-sm' : 'text-muted'}`}>
+          兌換管理
+          {pendingCount > 0 && <span className="ml-1.5 rounded-full bg-danger px-1.5 text-[10px] font-bold text-white">{pendingCount}</span>}
+        </button>
+      </div>
+      {tab === 'redeem' ? <Redemptions /> : <Catalog />}
+    </div>
+  )
+}
+
+function Catalog() {
   const { user, nameOf, rewards, categoriesById, balanceOf, reservedOf, requestRedemption } = useStore()
   const toast = useToast()
   const [showInactive, setShowInactive] = useState(false)

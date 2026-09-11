@@ -28,7 +28,7 @@ export default function Partner() {
           <span className="rounded-full bg-white/20 px-3 py-1">待完成 {todo.length}</span>
           <span className="rounded-full bg-white/20 px-3 py-1">每日 {daily.length}</span>
           <span className="rounded-full bg-white/20 px-3 py-1">待審核 {submitted.length}</span>
-          {pendingRedeem.length > 0 && <Link to="/redemptions" className="rounded-full bg-white/20 px-3 py-1">兌換申請 {pendingRedeem.length} →</Link>}
+          {pendingRedeem.length > 0 && <Link to="/rewards?tab=redeem" className="rounded-full bg-white/20 px-3 py-1">兌換申請 {pendingRedeem.length} →</Link>}
         </div>
       </section>
 
