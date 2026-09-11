@@ -382,7 +382,7 @@ export function StoreProvider({ children }) {
     image_urls: input.image_urls ?? [],
     category_id: input.category_id || null,
     cost_points: Number(input.cost_points) || 0,
-    stock: input.unlimited ? -1 : Math.max(0, Number(input.stock) || 0),
+    stock: -1, // 不做限量,一律無限供應
     is_active: input.is_active ?? true,
   })
 

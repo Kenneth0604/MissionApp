@@ -19,8 +19,6 @@ export default function RewardForm() {
     category_id: editing?.category_id ?? '',
     redeemable: editing?.redeemable ?? true,
     cost_points: editing?.cost_points ?? 50,
-    unlimited: editing ? editing.stock === -1 : true,
-    stock: editing && editing.stock >= 0 ? editing.stock : 1,
     is_active: editing?.is_active ?? true,
   }))
   const [busy, setBusy] = useState(false)
@@ -87,17 +85,6 @@ export default function RewardForm() {
           </>
         ) : (
           <p className="mt-2 text-xs text-muted">不會出現「申請兌換」按鈕,只能在建立任務時指定為完成獎勵。</p>
-        )}
-      </div>
-
-      <div>
-        <span className="label">庫存</span>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => patch({ unlimited: true })} className={`chip flex-1 ${form.unlimited ? 'chip-active' : ''}`}>無限</button>
-          <button type="button" onClick={() => patch({ unlimited: false })} className={`chip flex-1 ${!form.unlimited ? 'chip-active' : ''}`}>限量</button>
-        </div>
-        {!form.unlimited && (
-          <input type="number" min="0" inputMode="numeric" value={form.stock} onChange={set('stock')} className="input mt-2" placeholder="份數" />
         )}
       </div>
 

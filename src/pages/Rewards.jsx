@@ -62,9 +62,8 @@ export default function Rewards() {
       ) : (
         <div className="space-y-2">
           {list.map((r) => {
-            const soldOut = r.stock === 0
             const affordable = available >= r.cost_points
-            const canRequest = r.is_active && r.redeemable !== false && !soldOut && affordable
+            const canRequest = r.is_active && r.redeemable !== false && affordable
             const thumb = r.image_urls[0]
             const open = expanded === r.id
             return (
@@ -79,7 +78,6 @@ export default function Rewards() {
                     <h3 className="font-semibold text-ink">{r.name}</h3>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                       <CategoryChip category={r.category} />
-                      <span>{r.stock === -1 ? '無限供應' : soldOut ? '已兌換完' : `剩 ${r.stock} 份`}</span>
                       <span>由 {nameOf(r.created_by)} 新增</span>
                       {!r.is_active && <span>已停用</span>}
                     </div>
@@ -106,7 +104,7 @@ export default function Rewards() {
                     <p className="flex flex-1 items-center justify-center rounded-2xl bg-surface-2 py-2.5 text-sm text-muted">完成指定任務才能獲得</p>
                   ) : (
                     <button onClick={() => onRequest(r)} disabled={!canRequest || busyId === r.id} className="btn-primary flex-1 py-2.5 text-sm">
-                      {soldOut ? '已兌換完' : !affordable ? `還差 ${r.cost_points - available} 點` : busyId === r.id ? '送出中…' : '申請兌換'}
+                      {!affordable ? `還差 ${r.cost_points - available} 點` : busyId === r.id ? '送出中…' : '申請兌換'}
                     </button>
                   )}
                   <Link to={`/rewards/${r.id}/edit`} className="btn-secondary py-2.5 text-sm">編輯</Link>

@@ -24,7 +24,7 @@ export default function DailyTaskForm() {
 
   const isSeries = Boolean(editing)
   const [scope, setScope] = useState('one')
-  const activeRewards = rewards.filter((r) => r.is_active && r.stock !== 0)
+  const activeRewards = rewards.filter((r) => r.is_active)
   const rewardMains = [
     ...mainsOf(categories, 'reward').filter((c) => activeRewards.some((r) => matchesFilter(r, c.id, categoriesById))),
     ...(activeRewards.some((r) => !r.category_id) ? [{ id: 'none', name: '未分類' }] : []),
@@ -295,7 +295,7 @@ export default function DailyTaskForm() {
                       onClick={() => patch({ reward_id: r.id })}
                       className={`chip py-2 ${form.reward_id === r.id ? 'bg-primary text-primary-fg ring-primary' : ''}`}
                     >
-                      {r.name}{r.stock > 0 ? `(剩 ${r.stock})` : ''}
+                      {r.name}
                     </button>
                   ))}
                 </div>

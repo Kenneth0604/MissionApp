@@ -19,7 +19,7 @@ export default function TaskForm() {
   // 誤入一般任務編輯連結但其實是每日任務:導去每日任務表單
   if (editing?.recurrence_rule) return <Navigate to={`/daily/${editing.id}/edit`} replace />
 
-  const activeRewards = rewards.filter((r) => r.is_active && r.stock !== 0)
+  const activeRewards = rewards.filter((r) => r.is_active)
   // 指定獎勵:主類別 → 次類別(可略)→ 獎勵。只列出有可用獎勵的類別;沒分類的獎勵歸在「未分類」
   const rewardMains = [
     ...mainsOf(categories, 'reward').filter((c) => activeRewards.some((r) => matchesFilter(r, c.id, categoriesById))),
@@ -216,7 +216,7 @@ export default function TaskForm() {
                       onClick={() => patch({ reward_id: r.id })}
                       className={`chip py-2 ${form.reward_id === r.id ? 'bg-primary text-primary-fg ring-primary' : ''}`}
                     >
-                      {r.name}{r.stock > 0 ? `(剩 ${r.stock})` : ''}
+                      {r.name}
                     </button>
                   ))}
                 </div>
