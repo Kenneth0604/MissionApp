@@ -35,17 +35,27 @@ export default function Tasks() {
     return t.created_by === user
   })
 
-  // 依優先程度排序(越急越前),同等級再看狀態、期限;待審核排最後(已經送出去,不用你動作)
-  const rank = { rejected: 0, pending: 1, submitted: 2, approved: 3 }
-  const sorted = sortBySearch([...list].sort((a, b) => {
-    if (tab === 'history') return b.updated_at.localeCompare(a.updated_at)
+  // 待審核的獨立成一個區塊(已經送出去,不用你動作),不跟待完成 / 已退回混在一起排序
+  const awaiting = tab !== 'history' ? list.filter((t) => t.status === 'submitted') : []
+  const active = tab === 'history' ? list : list.filter((t) => t.status !== 'submitted')
+
+  const byPriorityDue = (a, b) => {
     if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3)
-    if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
     if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
     if (a.due_date) return -1
     if (b.due_date) return 1
     return b.updated_at.localeCompare(a.updated_at)
-  }), filter.q)
+  }
+
+  const sortedAwaiting = sortBySearch([...awaiting].sort(byPriorityDue), filter.q)
+  const sortedActive = sortBySearch(
+    [...active].sort((a, b) => {
+      if (tab === 'history') return b.updated_at.localeCompare(a.updated_at)
+      if (a.status !== b.status) return a.status === 'rejected' ? -1 : b.status === 'rejected' ? 1 : 0
+      return byPriorityDue(a, b)
+    }),
+    filter.q,
+  )
 
   return (
     <div className="space-y-4">
@@ -81,10 +91,22 @@ export default function Tasks() {
 
       {view === 'calendar' ? (
         <TaskCalendar tasks={sortBySearch(tasks.filter((t) => !isDaily(t) && (t.shared || t.assigned_to === user) && matchTask(t, filter)), filter.q)} />
-      ) : sorted.length === 0 ? (
+      ) : sortedAwaiting.length === 0 && sortedActive.length === 0 ? (
         <p className="empty py-8">這裡沒有任務</p>
       ) : (
-        <div className="space-y-2">{sorted.map((t) => <TaskCard key={t.id} task={t} />)}</div>
+        <>
+          {sortedAwaiting.length > 0 && (
+            <section>
+              <h2 className="section-title">
+                待審核 <span className="rounded-full bg-surface-2 px-2 text-xs text-muted">{sortedAwaiting.length}</span>
+              </h2>
+              <div className="space-y-2">{sortedAwaiting.map((t) => <TaskCard key={t.id} task={t} />)}</div>
+            </section>
+          )}
+          {sortedActive.length > 0 && (
+            <div className="space-y-2">{sortedActive.map((t) => <TaskCard key={t.id} task={t} />)}</div>
+          )}
+        </>
       )}
 
       <Link
