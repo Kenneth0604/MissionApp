@@ -6,7 +6,30 @@ import { mainsOf, subsOf } from '../lib/categories.js'
 export const EMPTY_FILTER = { q: '', priorities: [], categories: [] }
 export const isFilterActive = (f) => Boolean(f.q.trim()) || f.priorities.length > 0 || f.categories.length > 0
 
-/** 任務是否符合篩選(優先度、類別可複選;文字搜尋比對標題、說明、選項、說明備註) */
+/** 搜尋字串 → 關鍵字(以空白切開,全部都要出現才算符合) */
+const termsOf = (q) => q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+
+/**
+ * 搜尋分數:0 = 不符合;越高越前面。
+ * 每個關鍵字都要出現在任一欄位;命中標題加 3 分、類別 2 分、其他(說明 / 備註 / 選項)1 分。
+ */
+export function searchScore(t, q) {
+  const terms = termsOf(q)
+  if (terms.length === 0) return 1
+  const title = (t.title ?? '').toLowerCase()
+  const cat = [t.category?.name, t.category?.parent?.name].filter(Boolean).join(' ').toLowerCase()
+  const rest = [t.description, t.note, t.chosen_choice, ...(t.choices ?? [])].filter(Boolean).join(' ').toLowerCase()
+  let score = 0
+  for (const term of terms) {
+    if (title.includes(term)) score += 3
+    else if (cat.includes(term)) score += 2
+    else if (rest.includes(term)) score += 1
+    else return 0 // 任一關鍵字沒出現就不符合(AND)
+  }
+  return score
+}
+
+/** 任務是否符合篩選(優先度、類別可複選;文字搜尋見 searchScore) */
 export function matchTask(t, f) {
   if (f.priorities.length && !f.priorities.includes(t.priority ?? 3)) return false
   if (f.categories.length) {
@@ -14,15 +37,13 @@ export function matchTask(t, f) {
     const parent = t.category?.parent_id
     if (!own || !(f.categories.includes(own) || (parent && f.categories.includes(parent)))) return false
   }
-  const q = f.q.trim().toLowerCase()
-  if (q) {
-    const hay = [t.title, t.description, t.note, t.chosen_choice, ...(t.choices ?? []), t.category?.name, t.category?.parent?.name]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    if (!hay.includes(q)) return false
-  }
-  return true
+  return searchScore(t, f.q) > 0
+}
+
+/** 有搜尋字時依分數排序(高分在前),沒有就維持原順序 */
+export function sortBySearch(list, q) {
+  if (!termsOf(q).length) return list
+  return [...list].sort((a, b) => searchScore(b, q) - searchScore(a, q))
 }
 
 const toggle = (list, v) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v])

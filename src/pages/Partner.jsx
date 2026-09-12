@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { isDaily, isReviewer, otherUser, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 import { formatDateTime } from '../lib/format.js'
-import TaskFilter, { EMPTY_FILTER, matchTask } from '../components/TaskFilter.jsx'
+import TaskFilter, { EMPTY_FILTER, matchTask, sortBySearch } from '../components/TaskFilter.jsx'
 
 /** 對方區:看對方的積分、待完成任務(可從這裡進去幫忙完成)、每日任務與積分明細 */
 export default function Partner() {
@@ -11,10 +11,11 @@ export default function Partner() {
   const other = otherUser(user)
   const name = nameOf(other)
   const [filter, setFilter] = useState(EMPTY_FILTER)
-  const byUrgency = (a, b) => (b.priority ?? 3) - (a.priority ?? 3) || (a.due_date || '9').localeCompare(b.due_date || '9')
+  // 有搜尋字時維持搜尋分數的順序;否則依優先度、期限
+  const byUrgency = (a, b) => (filter.q.trim() ? 0 : ((b.priority ?? 3) - (a.priority ?? 3) || (a.due_date || '9').localeCompare(b.due_date || '9')))
 
   const open = (t) => t.status === 'pending' || t.status === 'rejected'
-  const visible = tasks.filter((t) => matchTask(t, filter))
+  const visible = sortBySearch(tasks.filter((t) => matchTask(t, filter)), filter.q)
   const todo = visible.filter((t) => !isDaily(t) && !t.shared && t.assigned_to === other && open(t)).sort(byUrgency)
   const daily = visible.filter((t) => isDaily(t) && !t.shared && t.assigned_to === other && open(t)).sort(byUrgency)
   const submitted = visible.filter((t) => t.status === 'submitted' && t.completed_by === other)

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { isDaily, isReviewer, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
-import TaskFilter, { EMPTY_FILTER, matchTask } from '../components/TaskFilter.jsx'
+import TaskFilter, { EMPTY_FILTER, matchTask, sortBySearch } from '../components/TaskFilter.jsx'
 import TaskCalendar from '../components/TaskCalendar.jsx'
 
 const TABS = [
@@ -37,7 +37,7 @@ export default function Tasks() {
 
   // 依優先程度排序(越急越前),同等級再看狀態、期限
   const rank = { submitted: 0, rejected: 1, pending: 2, approved: 3 }
-  const sorted = [...list].sort((a, b) => {
+  const sorted = sortBySearch([...list].sort((a, b) => {
     if (tab === 'history') return b.updated_at.localeCompare(a.updated_at)
     if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3)
     if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
@@ -45,7 +45,7 @@ export default function Tasks() {
     if (a.due_date) return -1
     if (b.due_date) return 1
     return b.updated_at.localeCompare(a.updated_at)
-  })
+  }), filter.q)
 
   return (
     <div className="space-y-4">
@@ -80,7 +80,7 @@ export default function Tasks() {
       </p>
 
       {view === 'calendar' ? (
-        <TaskCalendar tasks={tasks.filter((t) => !isDaily(t) && matchTask(t, filter))} />
+        <TaskCalendar tasks={sortBySearch(tasks.filter((t) => !isDaily(t) && matchTask(t, filter)), filter.q)} />
       ) : sorted.length === 0 ? (
         <p className="empty py-8">這裡沒有任務</p>
       ) : (
