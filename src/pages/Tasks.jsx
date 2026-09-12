@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { isDaily, isReviewer, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
-import CategoryFilter from '../components/CategoryFilter.jsx'
-import { matchesFilter } from '../lib/categories.js'
+import TaskFilter, { EMPTY_FILTER, matchTask } from '../components/TaskFilter.jsx'
 
 const TABS = [
   { key: 'mine', label: '我要完成的' },
@@ -12,15 +11,15 @@ const TABS = [
 ]
 
 export default function Tasks() {
-  const { user, tasks, categoriesById } = useStore()
+  const { user, tasks } = useStore()
   const [params, setParams] = useSearchParams()
   const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'mine'
-  const [category, setCategory] = useState('')
+  const [filter, setFilter] = useState(EMPTY_FILTER)
 
   // 週期性(每日 / 每週)任務改在「每日任務」區管理與顯示
   const list = tasks.filter((t) => {
     if (isDaily(t)) return false
-    if (!matchesFilter(t, category, categoriesById)) return false
+    if (!matchTask(t, filter)) return false
     if (tab === 'history') return t.status === 'approved'
     if (t.status === 'approved') return false
     if (tab === 'mine') {
@@ -59,7 +58,7 @@ export default function Tasks() {
         ))}
       </div>
 
-      <CategoryFilter kind="task" value={category} onChange={setCategory} />
+      <TaskFilter value={filter} onChange={setFilter} />
 
       <p className="text-center text-xs text-muted">
         每天 / 每週重複的任務在「<Link to="/daily" className="text-primary underline">每日任務</Link>」區。

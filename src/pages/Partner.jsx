@@ -1,20 +1,24 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { isDaily, isReviewer, otherUser, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 import { formatDateTime } from '../lib/format.js'
+import TaskFilter, { EMPTY_FILTER, matchTask } from '../components/TaskFilter.jsx'
 
 /** 對方區:看對方的積分、待完成任務(可從這裡進去幫忙完成)、每日任務與積分明細 */
 export default function Partner() {
   const { user, nameOf, tasks, ledger, redemptions, balanceOf, reservedOf } = useStore()
   const other = otherUser(user)
   const name = nameOf(other)
+  const [filter, setFilter] = useState(EMPTY_FILTER)
   const byUrgency = (a, b) => (b.priority ?? 3) - (a.priority ?? 3) || (a.due_date || '9').localeCompare(b.due_date || '9')
 
   const open = (t) => t.status === 'pending' || t.status === 'rejected'
-  const todo = tasks.filter((t) => !isDaily(t) && !t.shared && t.assigned_to === other && open(t)).sort(byUrgency)
-  const daily = tasks.filter((t) => isDaily(t) && !t.shared && t.assigned_to === other && open(t)).sort(byUrgency)
-  const submitted = tasks.filter((t) => t.status === 'submitted' && t.completed_by === other)
-  const done = tasks.filter((t) => t.status === 'approved' && (t.completed_by ?? t.assigned_to) === other).slice(0, 5)
+  const visible = tasks.filter((t) => matchTask(t, filter))
+  const todo = visible.filter((t) => !isDaily(t) && !t.shared && t.assigned_to === other && open(t)).sort(byUrgency)
+  const daily = visible.filter((t) => isDaily(t) && !t.shared && t.assigned_to === other && open(t)).sort(byUrgency)
+  const submitted = visible.filter((t) => t.status === 'submitted' && t.completed_by === other)
+  const done = visible.filter((t) => t.status === 'approved' && (t.completed_by ?? t.assigned_to) === other).slice(0, 5)
   const theirLedger = ledger.filter((l) => l.user_id === other).slice(0, 10)
   const pendingRedeem = redemptions.filter((d) => d.status === 'requested' && d.requested_by === other)
 
@@ -35,6 +39,8 @@ export default function Partner() {
       <Link to="/tasks/new" className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 py-3.5 font-semibold text-primary">
         <span className="text-xl leading-none">＋</span> 派新任務給 {name}
       </Link>
+
+      <TaskFilter value={filter} onChange={setFilter} />
 
       <Section title={`${name} 要完成的`} count={todo.length} empty={`${name} 目前沒有待完成的任務`} hint="點進去可以「幫忙完成」,積分會加倍給你">
         {todo.map((t) => <TaskCard key={t.id} task={t} />)}
