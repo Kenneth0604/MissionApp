@@ -89,6 +89,14 @@ async function buildNotices(p: WebhookPayload): Promise<Notice[]> {
     const url = `${APP_BASE}/tasks/${rec.id}`
     const tag = `task-${rec.id}`
 
+    // 優先程度提醒(pg_cron → send_priority_reminders):緊急每天、有點急每兩天
+    if ((p.type as string) === 'REMINDER') {
+      const level = rec.priority >= 5 ? '緊急' : '有點急'
+      const due = rec.due_date ? `,期限 ${String(rec.due_date).slice(5).replace('-', '/')}` : ''
+      const to = rec.shared ? Object.keys(users) : rec.assigned_to ? [rec.assigned_to] : []
+      return to.map((id) => ({ to: id, title: `⏰ ${level}任務提醒`, body: `「${rec.title}」還沒完成${due}`, url, tag: `remind-${rec.id}` }))
+    }
+
     const others = Object.keys(users).filter((id) => id !== rec.created_by)
     // 完成者(共同任務用 completed_by;一般任務就是被指派者)
     const doer = rec.completed_by ?? rec.assigned_to
