@@ -496,6 +496,8 @@ export function StoreProvider({ children }) {
     },
     [tasksById, deleteRow],
   )
+  /** 只改期限(日曆拖曳用);走跟其他欄位一樣的本機優先 + 背景同步 */
+  const setTaskDueDate = useCallback((id, due_date) => updateRow('tasks', id, { due_date }), [updateRow])
 
   const submitTask = useCallback(
     async (id, choice, note) => rpc('submit_task', { p_task_id: id, p_choice: choice ?? null, p_note: note ?? null }),
@@ -618,6 +620,7 @@ export function StoreProvider({ children }) {
       updateTask,
       updateSeries,
       deleteTask,
+      setTaskDueDate,
       submitTask,
       setTaskNote,
       approveTask,
@@ -637,7 +640,7 @@ export function StoreProvider({ children }) {
       authUser, user, userId, users, nameOf, ready, fatal, login, logout, retry, refresh,
       outbox.length, offline, syncing, flush,
       tasks, ledger, rewards, redemptions, categories, categoriesById, presets, createPreset, updatePreset, deletePreset, balanceOf, reservedOf,
-      createTask, updateTask, updateSeries, deleteTask, submitTask, setTaskNote, approveTask, withdrawTask, rejectTask, stopRecurrence,
+      createTask, updateTask, updateSeries, deleteTask, setTaskDueDate, submitTask, setTaskNote, approveTask, withdrawTask, rejectTask, stopRecurrence,
       createReward, updateReward, requestRedemption, fulfillRedemption, rejectRedemption,
       createCategory, updateCategory, deleteCategory,
     ],

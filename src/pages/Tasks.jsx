@@ -35,8 +35,8 @@ export default function Tasks() {
     return t.created_by === user
   })
 
-  // 依優先程度排序(越急越前),同等級再看狀態、期限
-  const rank = { submitted: 0, rejected: 1, pending: 2, approved: 3 }
+  // 依優先程度排序(越急越前),同等級再看狀態、期限;待審核排最後(已經送出去,不用你動作)
+  const rank = { rejected: 0, pending: 1, submitted: 2, approved: 3 }
   const sorted = sortBySearch([...list].sort((a, b) => {
     if (tab === 'history') return b.updated_at.localeCompare(a.updated_at)
     if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3)
@@ -80,7 +80,7 @@ export default function Tasks() {
       </p>
 
       {view === 'calendar' ? (
-        <TaskCalendar tasks={sortBySearch(tasks.filter((t) => !isDaily(t) && matchTask(t, filter)), filter.q)} />
+        <TaskCalendar tasks={sortBySearch(tasks.filter((t) => !isDaily(t) && (t.shared || t.assigned_to === user) && matchTask(t, filter)), filter.q)} />
       ) : sorted.length === 0 ? (
         <p className="empty py-8">這裡沒有任務</p>
       ) : (

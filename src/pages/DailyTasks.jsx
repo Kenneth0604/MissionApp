@@ -31,7 +31,7 @@ export default function DailyTasks() {
     return t.created_by === user
   })
 
-  const rank = { submitted: 0, rejected: 1, pending: 2, approved: 3 }
+  const rank = { rejected: 0, pending: 1, submitted: 2, approved: 3 }
   const sorted = [...list].sort((a, b) => {
     if (tab === 'history') return b.updated_at.localeCompare(a.updated_at)
     if ((b.priority ?? 3) !== (a.priority ?? 3)) return (b.priority ?? 3) - (a.priority ?? 3) // 越急越前面
