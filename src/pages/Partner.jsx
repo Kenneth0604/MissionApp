@@ -4,6 +4,7 @@ import { isDaily, isReviewer, otherUser, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 import { formatDateTime } from '../lib/format.js'
 import TaskFilter, { EMPTY_FILTER, matchTask, sortBySearch } from '../components/TaskFilter.jsx'
+import TaskCalendar from '../components/TaskCalendar.jsx'
 
 /** 對方區:看對方的積分、待完成任務(可從這裡進去幫忙完成)、每日任務與積分明細 */
 export default function Partner() {
@@ -11,6 +12,7 @@ export default function Partner() {
   const other = otherUser(user)
   const name = nameOf(other)
   const [filter, setFilter] = useState(EMPTY_FILTER)
+  const [view, setView] = useState('list')
   // 有搜尋字時維持搜尋分數的順序;否則依優先度、期限
   const byUrgency = (a, b) => (filter.q.trim() ? 0 : ((b.priority ?? 3) - (a.priority ?? 3) || (a.due_date || '9').localeCompare(b.due_date || '9')))
 
@@ -41,8 +43,17 @@ export default function Partner() {
         <span className="text-xl leading-none">＋</span> 派新任務給 {name}
       </Link>
 
-      <TaskFilter value={filter} onChange={setFilter} />
+      <div className="flex items-start gap-2">
+        <div className="flex-1"><TaskFilter value={filter} onChange={setFilter} /></div>
+        <button type="button" onClick={() => setView(view === 'list' ? 'calendar' : 'list')} className={`chip shrink-0 py-2 ${view === 'calendar' ? 'chip-active' : ''}`}>
+          {view === 'calendar' ? '☰ 列表' : '📆 日曆'}
+        </button>
+      </div>
 
+      {view === 'calendar' ? (
+        <TaskCalendar tasks={visible.filter((t) => !isDaily(t) && (t.shared || t.assigned_to === other))} />
+      ) : (
+      <>
       <Section title={`${name} 要完成的`} count={todo.length} empty={`${name} 目前沒有待完成的任務`} hint="點進去可以「幫忙完成」,積分會加倍給你">
         {todo.map((t) => <TaskCard key={t.id} task={t} />)}
       </Section>
@@ -63,6 +74,8 @@ export default function Partner() {
         <Section title="最近完成" count={done.length}>
           {done.map((t) => <TaskCard key={t.id} task={t} />)}
         </Section>
+      )}
+      </>
       )}
 
       <section>

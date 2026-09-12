@@ -6,7 +6,7 @@
   "start_url": "/MissionApp/",
   "scope": "/MissionApp/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#fbf4f8",
   "theme_color": "#e86aa8",
   "icons": [

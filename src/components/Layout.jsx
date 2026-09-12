@@ -19,7 +19,7 @@ export default function Layout() {
   ]
 
   return (
-    <div className="mx-auto flex h-full max-w-md flex-col bg-bg">
+    <div className="mx-auto flex h-full max-w-md flex-col bg-bg landscape:max-w-3xl">
       <header className="pt-safe hero sticky top-0 z-10 text-white shadow">
         <div className="flex items-center justify-between px-4 py-3">
           <h1 className="text-lg font-bold tracking-wide">發任務用ㄉ東西</h1>
@@ -44,7 +44,7 @@ export default function Layout() {
 
       {/* 一般 flex 子元素而非 fixed:iOS 主畫面 App 對 fixed+bottom:0 的高度計算會留縫 */}
       <nav className="pb-safe z-10 shrink-0 border-t border-line bg-surface">
-        <div className="mx-auto grid max-w-md grid-cols-6">
+        <div className="mx-auto grid max-w-md grid-cols-6 landscape:max-w-3xl">
           {nav.map(({ to, label, icon: Icon, end, badge }) => (
             <NavLink
               key={to}
