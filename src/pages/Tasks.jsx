@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { isDaily, isReviewer, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 import TaskFilter, { EMPTY_FILTER, matchTask } from '../components/TaskFilter.jsx'
+import TaskCalendar from '../components/TaskCalendar.jsx'
 
 const TABS = [
   { key: 'mine', label: '我要完成的' },
@@ -15,6 +16,8 @@ export default function Tasks() {
   const [params, setParams] = useSearchParams()
   const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'mine'
   const [filter, setFilter] = useState(EMPTY_FILTER)
+  const view = params.get('view') === 'calendar' ? 'calendar' : 'list'
+  const setView = (v) => setParams({ tab, view: v })
 
   // 週期性(每日 / 每週)任務改在「每日任務」區管理與顯示
   const list = tasks.filter((t) => {
@@ -46,25 +49,39 @@ export default function Tasks() {
 
   return (
     <div className="space-y-4">
+      {view === 'list' && (
       <div className="flex rounded-2xl bg-surface-2 p-1">
         {TABS.map((t) => (
           <button
             key={t.key}
-            onClick={() => setParams({ tab: t.key })}
+            onClick={() => setParams({ tab: t.key, view })}
             className={`flex-1 rounded-xl py-2 text-sm font-medium transition ${tab === t.key ? 'bg-surface text-primary shadow-sm' : 'text-muted'}`}
           >
             {t.label}
           </button>
         ))}
       </div>
+      )}
 
-      <TaskFilter value={filter} onChange={setFilter} />
+      <div className="flex items-center gap-2">
+        <div className="flex-1"><TaskFilter value={filter} onChange={setFilter} /></div>
+        <button
+          type="button"
+          onClick={() => setView(view === 'list' ? 'calendar' : 'list')}
+          className={`chip shrink-0 self-start py-2 ${view === 'calendar' ? 'chip-active' : ''}`}
+          title="切換列表 / 日曆"
+        >
+          {view === 'calendar' ? '☰ 列表' : '📆 日曆'}
+        </button>
+      </div>
 
       <p className="text-center text-xs text-muted">
         每天 / 每週重複的任務在「<Link to="/daily" className="text-primary underline">每日任務</Link>」區。
       </p>
 
-      {sorted.length === 0 ? (
+      {view === 'calendar' ? (
+        <TaskCalendar tasks={tasks.filter((t) => !isDaily(t) && matchTask(t, filter))} />
+      ) : sorted.length === 0 ? (
         <p className="empty py-8">這裡沒有任務</p>
       ) : (
         <div className="space-y-2">{sorted.map((t) => <TaskCard key={t.id} task={t} />)}</div>
