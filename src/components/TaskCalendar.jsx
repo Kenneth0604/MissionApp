@@ -6,7 +6,9 @@ import { appTodayISO } from '../lib/format.js'
 const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六']
 const COLORS = ['#e86aa8', '#a78bfa', '#16a37a', '#d98a1a', '#3b82f6', '#ef4444', '#0d9488', '#8b5cf6', '#f59e0b', '#64748b']
 
-const DAY_W = 46 // 每天欄寬(px)
+const DEFAULT_DAY_W = 46 // 每天欄寬(px)預設值
+const MIN_DAY_W = 26
+const MAX_DAY_W = 100
 const PAST_DAYS = 60 // 今天往前可捲動的天數
 const FUTURE_DAYS = 180 // 今天往後可捲動的天數
 const TOTAL_DAYS = PAST_DAYS + FUTURE_DAYS + 1
@@ -24,6 +26,7 @@ const indexOf = (dayISO, rangeStartISO) => Math.round((parseISO(dayISO) - parseI
 /**
  * 週曆檢視:連續左右滑動(不分頁),任務標題放在建立日,有期限就從建立日拉一條線到期限日。
  * 相同(主)類別放在一起並用同一個顏色。長按任務可拖曳調整期限(未完成的任務才能拖)。
+ * 兩指可以縮放每天欄寬。
  */
 export default function TaskCalendar({ tasks }) {
   const { setTaskDueDate } = useStore()
@@ -33,22 +36,26 @@ export default function TaskCalendar({ tasks }) {
   const days = useMemo(() => Array.from({ length: TOTAL_DAYS }, (_, i) => toISO(addDays(parseISO(rangeStart), i))), [rangeStart])
   const todayIndex = PAST_DAYS
 
+  const [dayW, setDayW] = useState(DEFAULT_DAY_W)
   const scrollRef = useRef(null)
+  const pointers = useRef(new Map()) // 目前按著的觸點(pinch 縮放用)
+  const pinch = useRef(null)
+
   const [label, setLabel] = useState('')
   const updateLabel = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    const startIdx = Math.round(el.scrollLeft / DAY_W)
-    const endIdx = Math.min(TOTAL_DAYS - 1, startIdx + Math.round(el.clientWidth / DAY_W) - 1)
+    const startIdx = Math.round(el.scrollLeft / dayW)
+    const endIdx = Math.min(TOTAL_DAYS - 1, startIdx + Math.round(el.clientWidth / dayW) - 1)
     const s = days[startIdx], e = days[endIdx]
     if (s && e) setLabel(`${Number(s.slice(5, 7))}/${Number(s.slice(8))} – ${Number(e.slice(5, 7))}/${Number(e.slice(8))}`)
-  }, [days])
+  }, [days, dayW])
 
   const scrollToToday = useCallback((behavior = 'smooth') => {
     const el = scrollRef.current
     if (!el) return
-    el.scrollTo({ left: todayIndex * DAY_W - el.clientWidth / 2 + DAY_W / 2, behavior })
-  }, [todayIndex])
+    el.scrollTo({ left: todayIndex * dayW - el.clientWidth / 2 + dayW / 2, behavior })
+  }, [todayIndex, dayW])
 
   useEffect(() => {
     scrollToToday('auto')
@@ -56,6 +63,40 @@ export default function TaskCalendar({ tasks }) {
     return () => cancelAnimationFrame(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ---------- 兩指縮放:抓在 scroll 容器上,兩指才啟動,單指讓瀏覽器正常捲動 ----------
+  function onContainerPointerDown(e) {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2) {
+      const [p1, p2] = [...pointers.current.values()]
+      const rect = scrollRef.current.getBoundingClientRect()
+      pinch.current = {
+        startDist: Math.hypot(p2.x - p1.x, p2.y - p1.y),
+        startDayW: dayW,
+        startScrollLeft: scrollRef.current.scrollLeft,
+        anchorX: (p1.x + p2.x) / 2 - rect.left,
+      }
+    }
+  }
+  function onContainerPointerMove(e) {
+    if (!pointers.current.has(e.pointerId)) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2 && pinch.current) {
+      e.preventDefault()
+      const [p1, p2] = [...pointers.current.values()]
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+      const scale = dist / pinch.current.startDist
+      const newDayW = Math.min(MAX_DAY_W, Math.max(MIN_DAY_W, pinch.current.startDayW * scale))
+      const dayIndex = (pinch.current.startScrollLeft + pinch.current.anchorX) / pinch.current.startDayW
+      setDayW(newDayW)
+      const el = scrollRef.current
+      requestAnimationFrame(() => { if (el) el.scrollLeft = dayIndex * newDayW - pinch.current.anchorX })
+    }
+  }
+  function onContainerPointerUp(e) {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) pinch.current = null
+  }
 
   const groups = useMemo(() => {
     const byGroup = new Map()
@@ -85,15 +126,25 @@ export default function TaskCalendar({ tasks }) {
         <button onClick={() => scrollToToday()} className="text-xs text-primary">回到今天</button>
       </div>
 
-      <div ref={scrollRef} onScroll={updateLabel} className="no-scrollbar card overflow-x-auto overflow-y-hidden" style={{ touchAction: 'pan-x' }}>
-        <div className="relative" style={{ width: TOTAL_DAYS * DAY_W }}>
+      {/* touchAction: pan-x pan-y(而非只 pan-x)— 才能讓拖動日曆時頁面仍可上下滑動;兩指縮放靠自己的 pointer 追蹤處理 */}
+      <div
+        ref={scrollRef}
+        onScroll={updateLabel}
+        onPointerDown={onContainerPointerDown}
+        onPointerMove={onContainerPointerMove}
+        onPointerUp={onContainerPointerUp}
+        onPointerCancel={onContainerPointerUp}
+        className="no-scrollbar card overflow-x-auto overflow-y-hidden"
+        style={{ touchAction: 'pan-x pan-y' }}
+      >
+        <div className="relative" style={{ width: TOTAL_DAYS * dayW }}>
           {/* 今天的高亮直線 */}
-          <div className="absolute inset-y-0 bg-primary/10" style={{ left: todayIndex * DAY_W, width: DAY_W }} />
+          <div className="absolute inset-y-0 bg-primary/10" style={{ left: todayIndex * dayW, width: dayW }} />
 
           {/* 日期表頭 */}
           <div className="sticky top-0 z-10 flex border-b border-line bg-surface-2 text-center text-[10px]">
             {days.map((d, i) => (
-              <div key={d} className={`shrink-0 border-l border-line/40 py-1.5 first:border-l-0 ${i === todayIndex ? 'font-bold text-primary' : 'text-muted'}`} style={{ width: DAY_W }}>
+              <div key={d} className={`shrink-0 border-l border-line/40 py-1.5 first:border-l-0 ${i === todayIndex ? 'font-bold text-primary' : 'text-muted'}`} style={{ width: dayW }}>
                 <div>{WEEKDAY[parseISO(d).getDay()]}</div>
                 <div className={`mx-auto mt-0.5 w-5 rounded-full leading-5 ${i === todayIndex ? 'bg-primary text-primary-fg' : ''}`}>{Number(d.slice(8))}</div>
               </div>
@@ -115,6 +166,7 @@ export default function TaskCalendar({ tasks }) {
                     item={item}
                     color={g.color}
                     dayCount={days.length}
+                    dayW={dayW}
                     rangeStart={rangeStart}
                     onCommit={(due_date) => setTaskDueDate(item.t.id, due_date)}
                     onOpen={() => navigate(`/tasks/${item.t.id}`)}
@@ -125,20 +177,20 @@ export default function TaskCalendar({ tasks }) {
           )}
         </div>
       </div>
-      <p className="text-center text-[11px] text-muted">左右滑動看更多日期;長條從建立日拉到期限日。長按任務可拖曳調整期限,已完成的不能拖。</p>
+      <p className="text-center text-[11px] text-muted">左右滑動看更多日期,兩指縮放可調整每天寬度;長條從建立日拉到期限日。長按任務可拖曳調整期限,已完成的不能拖。</p>
     </div>
   )
 }
 
 /** 一條任務長條:一般點擊開啟詳情;長按(380ms)後可左右拖曳調整期限 */
-function CalendarBar({ item, color, dayCount, rangeStart, onCommit, onOpen }) {
+function CalendarBar({ item, color, dayCount, dayW, rangeStart, onCommit, onOpen }) {
   const { t, colStart, colEnd } = item
   const draggable = t.status === 'pending' || t.status === 'rejected'
   const [dragDx, setDragDx] = useState(null) // null = 未拖曳;數字 = 拖曳中的像素位移
   const stateRef = useRef({ startX: 0, startY: 0, armed: false, moved: false, timer: null })
 
-  const width = (colEnd - colStart + 1) * DAY_W
-  const dayDelta = dragDx == null ? 0 : Math.round(dragDx / DAY_W)
+  const width = (colEnd - colStart + 1) * dayW
+  const dayDelta = dragDx == null ? 0 : Math.round(dragDx / dayW)
   const previewEnd = Math.min(dayCount - 1, Math.max(colStart, colEnd + dayDelta))
   const previewStart = colStart // 起點(建立日)固定不動,拖曳改變的是期限那一端
 
@@ -148,7 +200,7 @@ function CalendarBar({ item, color, dayCount, rangeStart, onCommit, onOpen }) {
   }
 
   function onPointerDown(e) {
-    if (!draggable) return
+    if (!draggable || e.isPrimary === false) return // 兩指縮放時忽略,交給外層容器處理
     const s = stateRef.current
     s.startX = e.clientX
     s.startY = e.clientY
@@ -187,7 +239,7 @@ function CalendarBar({ item, color, dayCount, rangeStart, onCommit, onOpen }) {
   }
 
   return (
-    <div className="relative h-8 landscape:h-9" style={{ width: dayCount * DAY_W }}>
+    <div className="relative h-8 landscape:h-9" style={{ width: dayCount * dayW }}>
       <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -195,11 +247,11 @@ function CalendarBar({ item, color, dayCount, rangeStart, onCommit, onOpen }) {
         onPointerCancel={() => { clearTimer(); setDragDx(null) }}
         title={t.title}
         style={{
-          left: previewStart * DAY_W,
-          width: dragDx != null ? (previewEnd - previewStart + 1) * DAY_W : width,
-          minWidth: DAY_W,
+          left: previewStart * dayW,
+          width: dragDx != null ? (previewEnd - previewStart + 1) * dayW : width,
+          minWidth: dayW,
           background: color,
-          touchAction: draggable ? 'none' : 'pan-x',
+          touchAction: draggable ? 'none' : 'pan-x pan-y',
         }}
         className={`absolute my-1 flex cursor-pointer items-center truncate rounded-full px-1.5 text-[11px] font-medium text-white shadow-sm landscape:px-2 landscape:text-sm ${
           dragDx != null ? 'ring-2 ring-white/80 shadow-lg' : ''
