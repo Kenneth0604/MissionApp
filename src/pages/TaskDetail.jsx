@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { canHelp, isHelped, isReviewer, reviewerOf, useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
@@ -21,6 +21,16 @@ export default function TaskDetail() {
   const [choice, setChoice] = useState('')
   const [note, setNote] = useState(() => task?.note ?? '')
   const [editingNote, setEditingNote] = useState(false)
+
+  // 同一個畫面換到另一筆任務(例如推播點進來)時,把上一筆留下的輸入狀態清掉
+  useEffect(() => {
+    setNote(task?.note ?? '')
+    setEditingNote(false)
+    setChoice('')
+    setRejecting(false)
+    setReason('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
 
   if (!task) return <p className="text-muted">找不到這個任務(可能已被刪除)</p>
 

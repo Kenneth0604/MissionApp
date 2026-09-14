@@ -1,8 +1,12 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { isDaily, isReviewer, isTodoFor, otherUser, useStore } from '../lib/store.jsx'
+import { onAppUpdate } from '../lib/push.js'
 
 export default function Layout() {
   const { user, nameOf, tasks, redemptions, pending, offline, syncing, sync } = useStore()
+  const [updateReady, setUpdateReady] = useState(false)
+  useEffect(() => onAppUpdate(() => setUpdateReady(true)), [])
 
   const todo = tasks.filter((t) => !isDaily(t) && isTodoFor(t, user)).length
   const review = tasks.filter((t) => !isDaily(t) && isReviewer(t, user)).length
@@ -26,6 +30,15 @@ export default function Layout() {
           <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium">{nameOf(user)}</span>
         </div>
       </header>
+
+      {updateReady && pending === 0 && (
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center justify-center gap-2 bg-success-soft px-4 py-1.5 text-xs font-medium text-success"
+        >
+          ✨ 有新版本 · 點這裡重新載入
+        </button>
+      )}
 
       {(pending > 0 || offline) && (
         <button

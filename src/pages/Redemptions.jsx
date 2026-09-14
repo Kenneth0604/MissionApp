@@ -16,6 +16,8 @@ export default function Redemptions() {
   const [params, setParams] = useSearchParams()
   const tab = params.get('view') === 'history' ? 'history' : 'pending'
   const [busyId, setBusyId] = useState(null)
+  const [rejectingId, setRejectingId] = useState(null) // 正在填拒絕原因的那筆
+  const [reason, setReason] = useState('')
 
   const list = redemptions.filter((d) => (tab === 'pending' ? d.status === 'requested' : d.status !== 'requested'))
 
@@ -40,9 +42,13 @@ export default function Redemptions() {
     act(d.id, () => fulfillRedemption(d.id), '已確認交付')
   }
 
+  // 拒絕原因改用畫面內的輸入框:iOS 主畫面 App 的 prompt() 不可靠,而且與任務退回的操作方式一致
+  function startReject(d) {
+    setRejectingId(d.id)
+    setReason('')
+  }
   function onReject(d) {
-    const reason = prompt('拒絕原因(選填)') ?? null
-    if (reason === null) return
+    setRejectingId(null)
     act(d.id, () => rejectRedemption(d.id, reason), '已拒絕')
   }
 
@@ -95,9 +101,18 @@ export default function Redemptions() {
                 {d.status === 'requested' &&
                   (mine ? (
                     <p className="mt-3 rounded-xl bg-info-soft p-2.5 text-xs text-info">等待對方交付後確認。</p>
+                  ) : rejectingId === d.id ? (
+                    <div className="mt-3 space-y-2 rounded-xl bg-danger-soft/40 p-3">
+                      <label className="label">拒絕原因(選填)</label>
+                      <textarea autoFocus rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="告訴對方為什麼不能交付" className="input" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => setRejectingId(null)} className="btn-secondary py-2 text-sm">取消</button>
+                        <button type="button" onClick={() => onReject(d)} disabled={busyId === d.id} className="btn-danger py-2 text-sm">確認拒絕</button>
+                      </div>
+                    </div>
                   ) : (
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button onClick={() => onReject(d)} disabled={busyId === d.id} className="btn-danger-outline py-2.5 text-sm">拒絕</button>
+                      <button onClick={() => startReject(d)} disabled={busyId === d.id} className="btn-danger-outline py-2.5 text-sm">拒絕</button>
                       <button onClick={() => onFulfill(d)} disabled={busyId === d.id} className="btn-success py-2.5 text-sm">
                         {busyId === d.id ? '處理中…' : '確認交付'}
                       </button>

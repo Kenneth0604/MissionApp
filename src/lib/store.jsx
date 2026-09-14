@@ -49,6 +49,8 @@ export const isHelped = (t) => !t.shared && Boolean(t.assigned_to) && Boolean(t.
 const StoreContext = createContext(null)
 const WATCHED_TABLES = ['tasks', 'points_ledger', 'rewards', 'redemptions', 'categories', 'task_presets']
 const POLL_MS = 60_000
+const ROLLOVER_MS = 5 * 60_000 // 週期任務換日結算(備援)最多每 5 分鐘呼叫一次
+const MAX_TRIES = 10 // 在「有網路」的情況下同一筆操作連續失敗這麼多次就放棄,避免卡住整個同步佇列
 const EMPTY = { tasks: [], ledger: [], rewards: [], redemptions: [], categories: [], presets: [] }
 const OUTBOX_KEY = 'missionapp:outbox'
 const USERS_KEY = 'missionapp:users'
@@ -85,8 +87,9 @@ function throwIf(error) {
 /** 是「連不上」而不是「伺服器拒絕」:保留在 outbox 稍後重送 */
 function isNetworkError(err) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
+  // 只看訊息,不把所有 TypeError 都當成斷線:程式錯誤若被誤判成「連不上」會永遠卡在 outbox
   const m = String(err?.message || err || '')
-  return err?.name === 'TypeError' || /failed to fetch|networkerror|load failed|network request failed|timeout|ECONN|fetch/i.test(m)
+  return /failed to fetch|networkerror|load failed|network request failed|timeout|ECONN|fetch/i.test(m)
 }
 
 /** 把一個 outbox 操作真的送到 Supabase */
@@ -123,6 +126,7 @@ export function StoreProvider({ children }) {
   const outboxRef = useRef(outbox)
   const flushing = useRef(false)
   const authRef = useRef(null)
+  const lastRollover = useRef(0)
 
   const setRaw = useCallback((next) => {
     setRawState((prev) => {
@@ -159,11 +163,15 @@ export function StoreProvider({ children }) {
   }, [])
 
   const logout = useCallback(async () => {
+    // 尚未同步的操作綁定目前帳號,登出後不能由另一個帳號送出;要先確認是否放棄
+    const pendingOps = outboxRef.current.length
+    if (pendingOps > 0 && !confirm(`還有 ${pendingOps} 筆操作尚未同步到伺服器,登出會直接捨棄。確定登出?`)) return
+    setOutbox([])
     setReady(false)
     setRaw(EMPTY)
     setFatal(null)
     await supabase?.auth.signOut()
-  }, [setRaw])
+  }, [setRaw, setOutbox])
 
   /** 載入失敗(例如離線)時重試,不登出、不清 session */
   const retry = useCallback(() => {
@@ -173,8 +181,12 @@ export function StoreProvider({ children }) {
 
   // ---------- 讀取 ----------
   const fetchAll = useCallback(async () => {
-    // 週期任務「過期即丟」的結算:資料庫每天凌晨 3 點由 pg_cron 執行,這裡是開 App 時的備援(冪等)
-    await supabase.rpc('rollover_recurring_tasks').then(() => {}, () => {})
+    // 週期任務「過期即丟」的結算:資料庫每天凌晨 3 點由 pg_cron 執行,這裡是開 App 時的備援(冪等);
+    // 每次重抓都跑一次太浪費,節流成最多每 ROLLOVER_MS 一次
+    if (Date.now() - lastRollover.current > ROLLOVER_MS) {
+      lastRollover.current = Date.now()
+      await supabase.rpc('rollover_recurring_tasks').then(() => {}, () => {})
+    }
     const [t, l, r, d, c, p] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('points_ledger').select('*').order('created_at', { ascending: false }),
@@ -207,6 +219,12 @@ export function StoreProvider({ children }) {
     try {
       while (outboxRef.current.length > 0) {
         const op = outboxRef.current[0]
+        // 別的帳號留下的操作(例如同一台裝置換人登入)不能用目前的身分送出
+        if (op.uid && op.uid !== authRef.current.id) {
+          setOutbox((q) => q.filter((x) => x.id !== op.id))
+          needRefresh = true
+          continue
+        }
         try {
           await execOp(op)
           setOutbox((q) => q.filter((x) => x.id !== op.id))
@@ -215,6 +233,17 @@ export function StoreProvider({ children }) {
         } catch (err) {
           if (isNetworkError(err)) {
             setOffline(true)
+            // 明明有網路卻一直送不出去:累計次數,超過上限就放棄這筆,避免後面的操作全部卡住
+            if (navigator.onLine !== false) {
+              const tries = (op.tries ?? 0) + 1
+              if (tries >= MAX_TRIES) {
+                setOutbox((q) => q.filter((x) => x.id !== op.id))
+                toast.error(`同步多次失敗,已放棄這筆操作:${err.message || err}`)
+                needRefresh = true
+                continue
+              }
+              setOutbox((q) => q.map((x) => (x.id === op.id ? { ...x, tries } : x)))
+            }
             break // 連不上:保留,稍後重送
           }
           // 伺服器拒絕(例如積分不足、狀態不對):丟棄這筆並提示,之後重抓校正
@@ -234,14 +263,14 @@ export function StoreProvider({ children }) {
     clearTimeout(refreshTimer.current)
     refreshTimer.current = setTimeout(() => {
       if (outboxRef.current.length > 0) flush().catch(() => {})
-      else refresh().catch(() => {})
+      else refresh().catch((e) => { if (isNetworkError(e)) setOffline(true) })
     }, 300)
   }, [refresh, flush])
 
   /** 先套用到本機、寫進 outbox,再背景同步 */
   const mutate = useCallback(
     (op) => {
-      const full = { id: newId(), ...op }
+      const full = { id: newId(), uid: authRef.current?.id ?? null, ...op }
       setRaw((prev) => applyLocal(prev, full, { userId: authRef.current?.id }))
       setOutbox((q) => [...q, full])
       setTimeout(() => flush().catch(() => {}), 0)
@@ -254,6 +283,13 @@ export function StoreProvider({ children }) {
     if (!authUser) return
     authRef.current = authUser
     let cancelled = false
+
+    // 丟掉別的帳號留下的未同步操作(舊版沒有 uid 標記的則保留)
+    const foreign = outboxRef.current.filter((op) => op.uid && op.uid !== authUser.id)
+    if (foreign.length > 0) {
+      setOutbox((q) => q.filter((op) => !(op.uid && op.uid !== authUser.id)))
+      toast.info(`已捨棄 ${foreign.length} 筆其他帳號未同步的操作`)
+    }
 
     const cached = readJSON(cacheKey(authUser.id), null)
     const cachedUsers = readJSON(USERS_KEY, [])
@@ -312,7 +348,7 @@ export function StoreProvider({ children }) {
       window.removeEventListener('offline', onOffline)
       supabase.removeChannel(channel)
     }
-  }, [authUser, refresh, flush, scheduleRefresh, attempt])
+  }, [authUser, refresh, flush, scheduleRefresh, attempt, setOutbox, toast])
 
   // ---------- 對照與正規化 ----------
   const me = users.find((u) => u.id === authUser?.id) ?? null

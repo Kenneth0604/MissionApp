@@ -16,9 +16,6 @@ export default function TaskForm() {
   const { user, nameOf, tasks, rewards, categories, categoriesById, createTask, updateTask } = useStore()
   const editing = id ? tasks.find((t) => t.id === id) : null
 
-  // 誤入一般任務編輯連結但其實是每日任務:導去每日任務表單
-  if (editing?.recurrence_rule) return <Navigate to={`/daily/${editing.id}/edit`} replace />
-
   const activeRewards = rewards.filter((r) => r.is_active)
   // 指定獎勵:主類別 → 次類別(可略)→ 獎勵。只列出有可用獎勵的類別;沒分類的獎勵歸在「未分類」
   const rewardMains = [
@@ -50,6 +47,9 @@ export default function TaskForm() {
   }))
   const [busy, setBusy] = useState(false)
 
+  // 誤入一般任務編輯連結但其實是每日任務:導去每日任務表單
+  //(放在所有 hook 之後:資料背景更新時 editing 可能從無變有,提早 return 會讓 hook 數量不一致而當掉)
+  if (editing?.recurrence_rule) return <Navigate to={`/daily/${editing.id}/edit`} replace />
   if (id && !editing) return <p className="text-muted">找不到這個任務</p>
   if (editing && !(editing.status === 'pending' || editing.status === 'rejected')) {
     // 待審核的任務要先撤回;已核准的不可編輯

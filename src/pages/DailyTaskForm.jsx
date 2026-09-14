@@ -19,9 +19,6 @@ export default function DailyTaskForm() {
   const { user, nameOf, tasks, rewards, categories, categoriesById, createTask, updateTask, updateSeries } = useStore()
   const editing = id ? tasks.find((t) => t.id === id) : null
 
-  // 誤入一般任務的編輯連結:導去一般任務表單
-  if (editing && !editing.recurrence_rule) return <Navigate to={`/tasks/${editing.id}/edit`} replace />
-
   const isSeries = Boolean(editing)
   const [scope, setScope] = useState('one')
   const activeRewards = rewards.filter((r) => r.is_active)
@@ -59,6 +56,8 @@ export default function DailyTaskForm() {
   const [choiceInput, setChoiceInput] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // 誤入一般任務的編輯連結:導去一般任務表單(放在所有 hook 之後,避免 hook 數量不一致)
+  if (editing && !editing.recurrence_rule) return <Navigate to={`/tasks/${editing.id}/edit`} replace />
   if (id && !editing) return <p className="text-muted">找不到這個每日任務</p>
   if (editing && !(editing.status === 'pending' || editing.status === 'rejected')) {
     return <p className="text-muted">只有「待完成」或「已退回」的期別可以編輯。</p>

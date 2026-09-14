@@ -32,50 +32,37 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return // Supabase 等外部請求不快取
 
+  // 只把成功的回應放進快取:部署中途的 404 / 5xx 頁若被存起來,離線殼就壞了
+  const cachePut = (key, res) => {
+    if (res && res.ok) {
+      const copy = res.clone()
+      caches.open(CACHE).then((c) => c.put(key, copy)).catch(() => {})
+    }
+    return res
+  }
+
   // 導覽請求:先網路,失敗回快取殼
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put(`${BASE}index.html`, copy))
-          return res
-        })
+        .then((res) => cachePut(`${BASE}index.html`, res))
         .catch(() => caches.match(`${BASE}index.html`).then((r) => r || caches.match(BASE))),
     )
     return
   }
 
-  // 帶 hash 的建置資源:快取優先
+  // 帶 hash 的建置資源(檔名含內容雜湊,不會變):快取優先
   if (url.pathname.startsWith(`${BASE}assets/`)) {
-    event.respondWith(
-      caches.match(request).then(
-        (hit) =>
-          hit ||
-          fetch(request).then((res) => {
-            const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put(request, copy))
-            return res
-          }),
-      ),
-    )
+    event.respondWith(caches.match(request).then((hit) => hit || fetch(request).then((res) => cachePut(request, res))))
     return
   }
 
-  // 其他同源靜態檔:stale-while-revalidate
+  // 其他同源檔案(manifest、icon,開發模式下還有原始模組):網路優先,失敗才回快取
+  // 之前是 stale-while-revalidate,在 npm run dev 時會一直拿到舊的模組
   event.respondWith(
-    caches.match(request).then((hit) => {
-      const network = fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put(request, copy))
-          }
-          return res
-        })
-        .catch(() => hit)
-      return hit || network
-    }),
+    fetch(request)
+      .then((res) => cachePut(request, res))
+      .catch(() => caches.match(request).then((hit) => hit || Response.error())),
   )
 })
 
