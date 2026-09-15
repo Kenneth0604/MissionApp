@@ -35,7 +35,7 @@ export default function Tasks() {
     return t.created_by === user
   })
 
-  // 待審核的獨立成一個區塊(已經送出去,不用你動作),不跟待完成 / 已退回混在一起排序
+  // 待完成(含已退回)排前面,待審核(已經送出去,不用你動作)獨立一區排後面;歷史不分區
   const awaiting = tab !== 'history' ? list.filter((t) => t.status === 'submitted') : []
   const active = tab === 'history' ? list : list.filter((t) => t.status !== 'submitted')
 
@@ -95,17 +95,8 @@ export default function Tasks() {
         <p className="empty py-8">這裡沒有任務</p>
       ) : (
         <>
-          {sortedAwaiting.length > 0 && (
-            <section>
-              <h2 className="section-title">
-                待審核 <span className="rounded-full bg-surface-2 px-2 text-xs text-muted">{sortedAwaiting.length}</span>
-              </h2>
-              <div className="space-y-2">{sortedAwaiting.map((t) => <TaskCard key={t.id} task={t} />)}</div>
-            </section>
-          )}
-          {sortedActive.length > 0 && (
-            <div className="space-y-2">{sortedActive.map((t) => <TaskCard key={t.id} task={t} />)}</div>
-          )}
+          <TaskSection title={tab === 'history' ? null : '待完成'} items={sortedActive} />
+          <TaskSection title="待審核" items={sortedAwaiting} />
         </>
       )}
 
@@ -117,5 +108,19 @@ export default function Tasks() {
         ＋
       </Link>
     </div>
+  )
+}
+
+function TaskSection({ title, items }) {
+  if (items.length === 0) return null
+  const cards = <div className="space-y-2">{items.map((t) => <TaskCard key={t.id} task={t} />)}</div>
+  if (!title) return cards
+  return (
+    <section>
+      <h2 className="section-title">
+        {title} <span className="rounded-full bg-surface-2 px-2 text-xs text-muted">{items.length}</span>
+      </h2>
+      {cards}
+    </section>
   )
 }
