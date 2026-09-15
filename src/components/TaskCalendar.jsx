@@ -9,6 +9,10 @@ const COLORS = ['#e86aa8', '#a78bfa', '#16a37a', '#d98a1a', '#3b82f6', '#ef4444'
 const DEFAULT_DAY_W = 46 // 每天欄寬(px)預設值
 const MIN_DAY_W = 26
 const MAX_DAY_W = 100
+const DEFAULT_ROW_H = 32 // 每列任務高度(px)預設值
+const MIN_ROW_H = 20
+const MAX_ROW_H = 64
+const MIN_PINCH_AXIS_DIST = 16 // 兩指在該軸的距離小於這個值時,該軸不參與縮放(避免除以極小值造成跳動)
 const PAST_DAYS = 60 // 今天往前可捲動的天數
 const FUTURE_DAYS = 180 // 今天往後可捲動的天數
 const TOTAL_DAYS = PAST_DAYS + FUTURE_DAYS + 1
@@ -26,7 +30,7 @@ const indexOf = (dayISO, rangeStartISO) => Math.round((parseISO(dayISO) - parseI
 /**
  * 週曆檢視:連續左右滑動(不分頁),任務標題放在建立日,有期限就從建立日拉一條線到期限日。
  * 相同(主)類別放在一起並用同一個顏色。長按任務可拖曳調整期限(未完成的任務才能拖)。
- * 兩指可以縮放每天欄寬。
+ * 兩指可以縮放:橫向調整每天欄寬,縱向調整每列高度,兩軸各自獨立。
  */
 export default function TaskCalendar({ tasks }) {
   const { setTaskDueDate } = useStore()
@@ -37,6 +41,7 @@ export default function TaskCalendar({ tasks }) {
   const todayIndex = PAST_DAYS
 
   const [dayW, setDayW] = useState(DEFAULT_DAY_W)
+  const [rowH, setRowH] = useState(DEFAULT_ROW_H)
   const scrollRef = useRef(null)
   const pointers = useRef(new Map()) // 目前按著的觸點(pinch 縮放用)
   const pinch = useRef(null)
@@ -65,14 +70,17 @@ export default function TaskCalendar({ tasks }) {
   }, [])
 
   // ---------- 兩指縮放:抓在 scroll 容器上,兩指才啟動,單指讓瀏覽器正常捲動 ----------
+  // 水平距離(X)控制每天欄寬 dayW,垂直距離(Y)控制每列高度 rowH,兩軸各自獨立計算縮放比例
   function onContainerPointerDown(e) {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (pointers.current.size === 2) {
       const [p1, p2] = [...pointers.current.values()]
       const rect = scrollRef.current.getBoundingClientRect()
       pinch.current = {
-        startDist: Math.hypot(p2.x - p1.x, p2.y - p1.y),
+        startDistX: Math.abs(p2.x - p1.x),
+        startDistY: Math.abs(p2.y - p1.y),
         startDayW: dayW,
+        startRowH: rowH,
         startScrollLeft: scrollRef.current.scrollLeft,
         anchorX: (p1.x + p2.x) / 2 - rect.left,
       }
@@ -84,13 +92,22 @@ export default function TaskCalendar({ tasks }) {
     if (pointers.current.size === 2 && pinch.current) {
       e.preventDefault()
       const [p1, p2] = [...pointers.current.values()]
-      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
-      const scale = dist / pinch.current.startDist
-      const newDayW = Math.min(MAX_DAY_W, Math.max(MIN_DAY_W, pinch.current.startDayW * scale))
-      const dayIndex = (pinch.current.startScrollLeft + pinch.current.anchorX) / pinch.current.startDayW
+      const { startDistX, startDistY, startDayW, startRowH, startScrollLeft, anchorX } = pinch.current
+      const distX = Math.abs(p2.x - p1.x)
+      const distY = Math.abs(p2.y - p1.y)
+
+      const newDayW = startDistX > MIN_PINCH_AXIS_DIST
+        ? Math.min(MAX_DAY_W, Math.max(MIN_DAY_W, startDayW * (distX / startDistX)))
+        : startDayW
+      const newRowH = startDistY > MIN_PINCH_AXIS_DIST
+        ? Math.min(MAX_ROW_H, Math.max(MIN_ROW_H, startRowH * (distY / startDistY)))
+        : startRowH
+
+      const dayIndex = (startScrollLeft + anchorX) / startDayW
       setDayW(newDayW)
+      setRowH(newRowH)
       const el = scrollRef.current
-      requestAnimationFrame(() => { if (el) el.scrollLeft = dayIndex * newDayW - pinch.current.anchorX })
+      requestAnimationFrame(() => { if (el) el.scrollLeft = dayIndex * newDayW - anchorX })
     }
   }
   function onContainerPointerUp(e) {
@@ -167,6 +184,7 @@ export default function TaskCalendar({ tasks }) {
                     color={g.color}
                     dayCount={days.length}
                     dayW={dayW}
+                    rowH={rowH}
                     rangeStart={rangeStart}
                     onCommit={(due_date) => setTaskDueDate(item.t.id, due_date)}
                     onOpen={() => navigate(`/tasks/${item.t.id}`)}
@@ -177,13 +195,13 @@ export default function TaskCalendar({ tasks }) {
           )}
         </div>
       </div>
-      <p className="text-center text-[11px] text-muted">左右滑動看更多日期,兩指縮放可調整每天寬度;長條從建立日拉到期限日。長按任務可拖曳調整期限,已完成的不能拖。</p>
+      <p className="text-center text-[11px] text-muted">左右滑動看更多日期,兩指橫向縮放可調整每天寬度、縱向縮放可調整每列高度;長條從建立日拉到期限日。長按任務可拖曳調整期限,已完成的不能拖。</p>
     </div>
   )
 }
 
 /** 一條任務長條:一般點擊開啟詳情;長按(380ms)後可左右拖曳調整期限 */
-function CalendarBar({ item, color, dayCount, dayW, rangeStart, onCommit, onOpen }) {
+function CalendarBar({ item, color, dayCount, dayW, rowH, rangeStart, onCommit, onOpen }) {
   const { t, colStart, colEnd } = item
   const draggable = t.status === 'pending' || t.status === 'rejected'
   const [dragDx, setDragDx] = useState(null) // null = 未拖曳;數字 = 拖曳中的像素位移
@@ -239,7 +257,7 @@ function CalendarBar({ item, color, dayCount, dayW, rangeStart, onCommit, onOpen
   }
 
   return (
-    <div className="relative h-8 landscape:h-9" style={{ width: dayCount * dayW }}>
+    <div className="relative" style={{ width: dayCount * dayW, height: rowH }}>
       <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
