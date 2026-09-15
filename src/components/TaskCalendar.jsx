@@ -12,7 +12,10 @@ const MAX_DAY_W = 100
 const DEFAULT_ROW_H = 32 // 每列任務高度(px)預設值
 const MIN_ROW_H = 20
 const MAX_ROW_H = 64
-const MIN_PINCH_AXIS_DIST = 16 // 兩指在該軸的距離小於這個值時,該軸不參與縮放(避免除以極小值造成跳動)
+// 兩指連線與水平線的夾角:< PINCH_LOCK_DEG 只縮欄寬,> 90-PINCH_LOCK_DEG 只縮列高,其間兩軸同時縮。
+// 若不鎖軸,接近水平的捏合在 Y 方向只有幾十 px,手抖幾 px 就是列高 ±20% 的跳動,整張日曆會閃。
+const PINCH_LOCK_DEG = 30
+const MIN_PINCH_AXIS_DIST = 24 // 該軸起始距離小於此值仍不縮放,避免除以極小值
 const PAST_DAYS = 60 // 今天往前可捲動的天數
 const FUTURE_DAYS = 180 // 今天往後可捲動的天數
 const TOTAL_DAYS = PAST_DAYS + FUTURE_DAYS + 1
@@ -70,16 +73,23 @@ export default function TaskCalendar({ tasks }) {
   }, [])
 
   // ---------- 兩指縮放:抓在 scroll 容器上,兩指才啟動,單指讓瀏覽器正常捲動 ----------
-  // 水平距離(X)控制每天欄寬 dayW,垂直距離(Y)控制每列高度 rowH,兩軸各自獨立計算縮放比例
+  // 水平距離(X)控制每天欄寬 dayW,垂直距離(Y)控制每列高度 rowH;按下時依兩指連線角度決定哪些軸參與,
+  // 尺寸取整數 px,值沒變就不 setState、不修正 scrollLeft,避免每個 pointermove 都重繪。
   function onContainerPointerDown(e) {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (pointers.current.size === 2) {
       const [p1, p2] = [...pointers.current.values()]
       const rect = scrollRef.current.getBoundingClientRect()
+      const startDistX = Math.abs(p2.x - p1.x)
+      const startDistY = Math.abs(p2.y - p1.y)
+      const angle = (Math.atan2(startDistY, startDistX) * 180) / Math.PI // 0 = 水平,90 = 垂直
       pinch.current = {
-        startDistX: Math.abs(p2.x - p1.x),
-        startDistY: Math.abs(p2.y - p1.y),
+        startDistX,
+        startDistY,
+        useX: angle < 90 - PINCH_LOCK_DEG && startDistX >= MIN_PINCH_AXIS_DIST,
+        useY: angle > PINCH_LOCK_DEG && startDistY >= MIN_PINCH_AXIS_DIST,
         startDayW: dayW,
+        lastDayW: dayW,
         startRowH: rowH,
         startScrollLeft: scrollRef.current.scrollLeft,
         anchorX: (p1.x + p2.x) / 2 - rect.left,
@@ -92,22 +102,23 @@ export default function TaskCalendar({ tasks }) {
     if (pointers.current.size === 2 && pinch.current) {
       e.preventDefault()
       const [p1, p2] = [...pointers.current.values()]
-      const { startDistX, startDistY, startDayW, startRowH, startScrollLeft, anchorX } = pinch.current
-      const distX = Math.abs(p2.x - p1.x)
-      const distY = Math.abs(p2.y - p1.y)
+      const p = pinch.current
 
-      const newDayW = startDistX > MIN_PINCH_AXIS_DIST
-        ? Math.min(MAX_DAY_W, Math.max(MIN_DAY_W, startDayW * (distX / startDistX)))
-        : startDayW
-      const newRowH = startDistY > MIN_PINCH_AXIS_DIST
-        ? Math.min(MAX_ROW_H, Math.max(MIN_ROW_H, startRowH * (distY / startDistY)))
-        : startRowH
-
-      const dayIndex = (startScrollLeft + anchorX) / startDayW
-      setDayW(newDayW)
-      setRowH(newRowH)
-      const el = scrollRef.current
-      requestAnimationFrame(() => { if (el) el.scrollLeft = dayIndex * newDayW - anchorX })
+      if (p.useX) {
+        const scaleX = Math.abs(p2.x - p1.x) / p.startDistX
+        const newDayW = Math.round(Math.min(MAX_DAY_W, Math.max(MIN_DAY_W, p.startDayW * scaleX)))
+        if (newDayW !== p.lastDayW) {
+          p.lastDayW = newDayW
+          setDayW(newDayW)
+          const dayIndex = (p.startScrollLeft + p.anchorX) / p.startDayW
+          const el = scrollRef.current
+          requestAnimationFrame(() => { if (el) el.scrollLeft = dayIndex * newDayW - p.anchorX })
+        }
+      }
+      if (p.useY) {
+        const scaleY = Math.abs(p2.y - p1.y) / p.startDistY
+        setRowH(Math.round(Math.min(MAX_ROW_H, Math.max(MIN_ROW_H, p.startRowH * scaleY))))
+      }
     }
   }
   function onContainerPointerUp(e) {
