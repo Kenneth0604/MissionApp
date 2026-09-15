@@ -115,7 +115,7 @@ export default function Settings() {
         </div>
       </section>
 
-      <p className="text-center text-xs text-muted">發任務用ㄉ東西 · 僅供兩人私人使用</p>
+      <p className="text-center text-xs text-muted">發任務用ㄉ東西 · 僅供兩人私人使用 · v{__APP_VERSION__}</p>
     </div>
   )
 }

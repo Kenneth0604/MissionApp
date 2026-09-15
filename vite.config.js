@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import pkg from './package.json' with { type: 'json' }
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -34,4 +35,11 @@ function serviceWorkerPlugin() {
 export default defineConfig({
   plugins: [react(), tailwindcss(), serviceWorkerPlugin()],
   base: BASE,
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.js'],
+  },
 })

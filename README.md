@@ -184,7 +184,31 @@ npm run dev
 ```bash
 npm run build      # 產出 dist/
 npm run preview    # 預覽建置結果
+npm test           # 單元測試(Vitest);部署流程會先跑測試再建置
 ```
+
+---
+
+## 五、行動裝置 App(Capacitor)
+
+`android/`、`ios/` 是原生殼,`capacitor.config.json` 讓 App 開啟後直接載入正式網址:
+
+```json
+"server": { "url": "https://kenneth0604.github.io/MissionApp/" }
+```
+
+所以**網頁一更新,App 重開就是新版**,不必重新 build、重裝或重新上架。只有改 App 名稱 / 圖示 / Bundle ID、加原生外掛時才要重新 build。
+
+```bash
+npm install
+npx cap add ios             # 第一次:產生 ios/(需 macOS + Xcode)
+npx cap add android         # 第一次:產生 android/(需 Android Studio)
+npm run cap:sync            # 建置 dist/ 並同步進 android/、ios/(改了 capacitor.config.json 才需要)
+npm run cap:open:android    # Android Studio → Build → Build APK(s) → 把 apk 傳到手機安裝
+npm run cap:open:ios        # Xcode(僅 macOS)→ 選裝置 → Run;免費 Apple ID 簽章 7 天過期需重新 Run
+```
+
+若想做完全離線版,刪掉 `server` 區塊再 `npm run cap:sync`。
 
 ---
 
