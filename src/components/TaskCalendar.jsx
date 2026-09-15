@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../lib/store.jsx'
 import { appTodayISO } from '../lib/format.js'
@@ -12,10 +12,10 @@ const MAX_DAY_W = 100
 const DEFAULT_ROW_H = 32 // 每列任務高度(px)預設值
 const MIN_ROW_H = 20
 const MAX_ROW_H = 64
-// 兩指連線與水平線的夾角:< PINCH_LOCK_DEG 只縮欄寬,> 90-PINCH_LOCK_DEG 只縮列高,其間兩軸同時縮。
-// 若不鎖軸,接近水平的捏合在 Y 方向只有幾十 px,手抖幾 px 就是列高 ±20% 的跳動,整張日曆會閃。
-const PINCH_LOCK_DEG = 30
-const MIN_PINCH_AXIS_DIST = 24 // 該軸起始距離小於此值仍不縮放,避免除以極小值
+const DOUBLE_TAP_MS = 300 // 兩下點擊的最大間隔
+const TAP_MAX_MS = 250 // 按下到放開超過這個時間就不算「點一下」
+const TAP_MAX_PX = 16 // 點一下允許的位移;也是兩下之間允許的距離
+const ZOOM_DRAG_PX = 120 // 縮放拖動:移動這麼多 px 尺寸變 2 倍(反向則 1/2)
 const PAST_DAYS = 60 // 今天往前可捲動的天數
 const FUTURE_DAYS = 180 // 今天往後可捲動的天數
 const TOTAL_DAYS = PAST_DAYS + FUTURE_DAYS + 1
@@ -33,7 +33,7 @@ const indexOf = (dayISO, rangeStartISO) => Math.round((parseISO(dayISO) - parseI
 /**
  * 週曆檢視:連續左右滑動(不分頁),任務標題放在建立日,有期限就從建立日拉一條線到期限日。
  * 相同(主)類別放在一起並用同一個顏色。長按任務可拖曳調整期限(未完成的任務才能拖)。
- * 兩指可以縮放:橫向調整每天欄寬,縱向調整每列高度,兩軸各自獨立。
+ * 縮放:在空白處快速點兩下,第二下按住不放拖動 — 左右調整每天欄寬,上下調整每列高度。
  */
 export default function TaskCalendar({ tasks }) {
   const { setTaskDueDate } = useStore()
@@ -46,8 +46,10 @@ export default function TaskCalendar({ tasks }) {
   const [dayW, setDayW] = useState(DEFAULT_DAY_W)
   const [rowH, setRowH] = useState(DEFAULT_ROW_H)
   const scrollRef = useRef(null)
-  const pointers = useRef(new Map()) // 目前按著的觸點(pinch 縮放用)
-  const pinch = useRef(null)
+  const gesture = useRef({ down: null, lastTap: null, disarmTimer: null, zoom: null })
+  const pendingScrollLeft = useRef(null)
+  // 第一下放開後到第二下按下之間、以及拖動縮放中,關掉原生捲動;否則第二下一拖瀏覽器就接手捲動並送 pointercancel
+  const [zoomArmed, setZoomArmed] = useState(false)
 
   const [label, setLabel] = useState('')
   const updateLabel = useCallback(() => {
@@ -72,59 +74,61 @@ export default function TaskCalendar({ tasks }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ---------- 兩指縮放:抓在 scroll 容器上,兩指才啟動,單指讓瀏覽器正常捲動 ----------
-  // 水平距離(X)控制每天欄寬 dayW,垂直距離(Y)控制每列高度 rowH;按下時依兩指連線角度決定哪些軸參與,
-  // 尺寸取整數 px,值沒變就不 setState、不修正 scrollLeft,避免每個 pointermove 都重繪。
+  // ---------- 縮放手勢:空白處快速點兩下,第二下按住拖動。左右 → 每天欄寬,上下 → 每列高度 ----------
   function onContainerPointerDown(e) {
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    if (pointers.current.size === 2) {
-      const [p1, p2] = [...pointers.current.values()]
-      const rect = scrollRef.current.getBoundingClientRect()
-      const startDistX = Math.abs(p2.x - p1.x)
-      const startDistY = Math.abs(p2.y - p1.y)
-      const angle = (Math.atan2(startDistY, startDistX) * 180) / Math.PI // 0 = 水平,90 = 垂直
-      pinch.current = {
-        startDistX,
-        startDistY,
-        useX: angle < 90 - PINCH_LOCK_DEG && startDistX >= MIN_PINCH_AXIS_DIST,
-        useY: angle > PINCH_LOCK_DEG && startDistY >= MIN_PINCH_AXIS_DIST,
-        startDayW: dayW,
-        lastDayW: dayW,
-        startRowH: rowH,
-        startScrollLeft: scrollRef.current.scrollLeft,
-        anchorX: (p1.x + p2.x) / 2 - rect.left,
-      }
+    if (!e.isPrimary || e.target.closest('[data-bar]')) return
+    const g = gesture.current
+    const last = g.lastTap
+    const isSecondTap = last && e.timeStamp - last.time < DOUBLE_TAP_MS && Math.hypot(e.clientX - last.x, e.clientY - last.y) < TAP_MAX_PX
+    g.down = { time: e.timeStamp, x: e.clientX, y: e.clientY }
+    if (!isSecondTap) return
+    clearTimeout(g.disarmTimer)
+    g.lastTap = null
+    const el = scrollRef.current
+    g.zoom = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startDayW: dayW,
+      startRowH: rowH,
+      startScrollLeft: el.scrollLeft,
+      anchorX: e.clientX - el.getBoundingClientRect().left,
     }
+    el.setPointerCapture?.(e.pointerId)
   }
   function onContainerPointerMove(e) {
-    if (!pointers.current.has(e.pointerId)) return
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    if (pointers.current.size === 2 && pinch.current) {
-      e.preventDefault()
-      const [p1, p2] = [...pointers.current.values()]
-      const p = pinch.current
-
-      if (p.useX) {
-        const scaleX = Math.abs(p2.x - p1.x) / p.startDistX
-        const newDayW = Math.round(Math.min(MAX_DAY_W, Math.max(MIN_DAY_W, p.startDayW * scaleX)))
-        if (newDayW !== p.lastDayW) {
-          p.lastDayW = newDayW
-          setDayW(newDayW)
-          const dayIndex = (p.startScrollLeft + p.anchorX) / p.startDayW
-          const el = scrollRef.current
-          requestAnimationFrame(() => { if (el) el.scrollLeft = dayIndex * newDayW - p.anchorX })
-        }
-      }
-      if (p.useY) {
-        const scaleY = Math.abs(p2.y - p1.y) / p.startDistY
-        setRowH(Math.round(Math.min(MAX_ROW_H, Math.max(MIN_ROW_H, p.startRowH * scaleY))))
-      }
+    const z = gesture.current.zoom
+    if (!z || e.pointerId !== z.pointerId) return
+    const newDayW = Math.round(Math.min(MAX_DAY_W, Math.max(MIN_DAY_W, z.startDayW * 2 ** ((e.clientX - z.startX) / ZOOM_DRAG_PX))))
+    const newRowH = Math.round(Math.min(MAX_ROW_H, Math.max(MIN_ROW_H, z.startRowH * 2 ** ((z.startY - e.clientY) / ZOOM_DRAG_PX))))
+    if (newDayW !== dayW) {
+      // 按下處那一天要留在原地:新寬度寫進 DOM 後、畫面畫出來前,在 useLayoutEffect 裡同幀修正 scrollLeft
+      pendingScrollLeft.current = ((z.startScrollLeft + z.anchorX) / z.startDayW) * newDayW - z.anchorX
+      setDayW(newDayW)
     }
+    if (newRowH !== rowH) setRowH(newRowH)
   }
   function onContainerPointerUp(e) {
-    pointers.current.delete(e.pointerId)
-    if (pointers.current.size < 2) pinch.current = null
+    const g = gesture.current
+    if (g.zoom) {
+      if (e.pointerId === g.zoom.pointerId) { g.zoom = null; setZoomArmed(false) }
+      return
+    }
+    const d = g.down
+    g.down = null
+    if (!d || e.type === 'pointercancel') return
+    if (e.timeStamp - d.time > TAP_MAX_MS || Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_MAX_PX) return
+    g.lastTap = { time: e.timeStamp, x: e.clientX, y: e.clientY }
+    setZoomArmed(true)
+    clearTimeout(g.disarmTimer)
+    g.disarmTimer = setTimeout(() => { g.lastTap = null; setZoomArmed(false) }, DOUBLE_TAP_MS)
   }
+  useLayoutEffect(() => {
+    if (pendingScrollLeft.current == null) return
+    scrollRef.current.scrollLeft = pendingScrollLeft.current
+    pendingScrollLeft.current = null
+  }, [dayW])
+  useEffect(() => () => clearTimeout(gesture.current.disarmTimer), [])
 
   const groups = useMemo(() => {
     const byGroup = new Map()
@@ -154,7 +158,7 @@ export default function TaskCalendar({ tasks }) {
         <button onClick={() => scrollToToday()} className="text-xs text-primary">回到今天</button>
       </div>
 
-      {/* touchAction: pan-x pan-y(而非只 pan-x)— 才能讓拖動日曆時頁面仍可上下滑動;兩指縮放靠自己的 pointer 追蹤處理 */}
+      {/* touchAction: pan-x pan-y(而非只 pan-x)— 才能讓拖動日曆時頁面仍可上下滑動;縮放手勢期間才切成 none */}
       <div
         ref={scrollRef}
         onScroll={updateLabel}
@@ -163,7 +167,7 @@ export default function TaskCalendar({ tasks }) {
         onPointerUp={onContainerPointerUp}
         onPointerCancel={onContainerPointerUp}
         className="no-scrollbar card overflow-x-auto overflow-y-hidden"
-        style={{ touchAction: 'pan-x pan-y' }}
+        style={{ touchAction: zoomArmed ? 'none' : 'pan-x pan-y' }}
       >
         <div className="relative" style={{ width: TOTAL_DAYS * dayW }}>
           {/* 今天的高亮直線 */}
@@ -206,7 +210,7 @@ export default function TaskCalendar({ tasks }) {
           )}
         </div>
       </div>
-      <p className="text-center text-[11px] text-muted">左右滑動看更多日期,兩指橫向縮放可調整每天寬度、縱向縮放可調整每列高度;長條從建立日拉到期限日。長按任務可拖曳調整期限,已完成的不能拖。</p>
+      <p className="text-center text-[11px] text-muted">左右滑動看更多日期;空白處快速點兩下、第二下按住拖動可縮放(左右調欄寬、上下調列高);長條從建立日拉到期限日。長按任務可拖曳調整期限,已完成的不能拖。</p>
     </div>
   )
 }
@@ -229,7 +233,7 @@ function CalendarBar({ item, color, dayCount, dayW, rowH, rangeStart, onCommit, 
   }
 
   function onPointerDown(e) {
-    if (!draggable || e.isPrimary === false) return // 兩指縮放時忽略,交給外層容器處理
+    if (!draggable || e.isPrimary === false) return
     const s = stateRef.current
     s.startX = e.clientX
     s.startY = e.clientY
@@ -270,6 +274,7 @@ function CalendarBar({ item, color, dayCount, dayW, rowH, rangeStart, onCommit, 
   return (
     <div className="relative" style={{ width: dayCount * dayW, height: rowH }}>
       <div
+        data-bar=""
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
