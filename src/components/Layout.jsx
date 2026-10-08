@@ -24,10 +24,20 @@ export default function Layout() {
 
   return (
     <div className="mx-auto flex h-full max-w-md flex-col bg-bg landscape:max-w-3xl">
-      <header className="pt-safe hero sticky top-0 z-10 text-white shadow">
-        <div className="flex items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-bold tracking-wide">發任務用ㄉ東西</h1>
-          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium">{nameOf(user)}</span>
+      <header className="pt-safe relative z-20 shrink-0" style={{ background: 'transparent' }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(135deg, var(--t-hero-from), var(--t-hero-to))',
+          opacity: 0.92,
+        }} />
+        <div style={{
+          position: 'absolute', inset: 0,
+          WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+          backdropFilter: 'blur(40px) saturate(180%)',
+        }} />
+        <div className="relative flex items-center justify-between px-4 py-3">
+          <h1 className="text-lg font-bold tracking-wide text-white">發任務用ㄉ東西</h1>
+          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-sm font-medium" style={{ WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>{nameOf(user)}</span>
         </div>
       </header>
 
@@ -56,26 +66,38 @@ export default function Layout() {
       </main>
 
       {/* 一般 flex 子元素而非 fixed:iOS 主畫面 App 對 fixed+bottom:0 的高度計算會留縫 */}
-      <nav className="pb-safe z-10 shrink-0 border-t border-line bg-surface">
-        <div className="mx-auto grid max-w-md grid-cols-6 landscape:max-w-3xl">
-          {nav.map(({ to, label, icon: Icon, end, badge }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                `relative flex flex-col items-center gap-0.5 py-2 text-[11px] ${isActive ? 'text-primary' : 'text-muted'}`
-              }
-            >
-              <Icon className="h-6 w-6" />
-              {label}
-              {badge > 0 && (
-                <span className="absolute right-3 top-1 min-w-[18px] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-[18px] text-white">
-                  {badge}
-                </span>
-              )}
-            </NavLink>
-          ))}
+      <nav className="relative z-10 shrink-0" style={{ background: 'transparent' }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'var(--t-surface)',
+          opacity: 0.92,
+        }} />
+        <div style={{
+          position: 'absolute', inset: 0,
+          WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+          backdropFilter: 'blur(40px) saturate(180%)',
+        }} />
+        <div className="relative" style={{ borderTop: '0.5px solid var(--t-line)' }}>
+          <div className="mx-auto grid max-w-md grid-cols-6 landscape:max-w-3xl">
+            {nav.map(({ to, label, icon: Icon, end, badge }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                className={({ isActive }) =>
+                  `relative flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium tracking-tight transition-colors duration-200 ${isActive ? 'text-primary' : 'text-muted'}`
+                }
+              >
+                <Icon className="h-6 w-6" />
+                {label}
+                {badge > 0 && (
+                  <span className="absolute right-3 top-1 min-w-[18px] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-[18px] text-white">
+                    {badge}
+                  </span>
+                )}
+              </NavLink>
+            ))}
+          </div>
         </div>
       </nav>
     </div>
