@@ -1,40 +1,47 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
-import { USERS } from '../lib/supabase.js'
 
-const CODES = ['A', 'B']
-const LAST_KEY = 'missionapp:last-user'
+const LAST_KEY = 'missionapp:last-username'
 
 function readLast() {
   try {
-    const v = localStorage.getItem(LAST_KEY)
-    return CODES.includes(v) ? v : null
+    return localStorage.getItem(LAST_KEY) || ''
   } catch {
-    return null
+    return ''
   }
 }
 
 export default function Login() {
-  const { login } = useStore()
-  // 記住上次登入的身分,下次直接停在密碼欄
-  const [who, setWho] = useState(readLast)
+  const { login, signup } = useStore()
+  const [mode, setMode] = useState('login') // login | signup
+  // 記住上次登入的帳號,下次直接填好
+  const [username, setUsername] = useState(readLast)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function onSubmit(e) {
     e.preventDefault()
     setError('')
+    setNotice('')
     setBusy(true)
     try {
-      await login(who, password)
-      try {
-        localStorage.setItem(LAST_KEY, who)
-      } catch {
-        /* ignore */
+      if (mode === 'login') {
+        await login(username, password)
+        try {
+          localStorage.setItem(LAST_KEY, username.trim())
+        } catch {
+          /* ignore */
+        }
+      } else {
+        const { needsConfirm } = await signup(username, password)
+        setMode('login')
+        setPassword('')
+        setNotice(needsConfirm ? '註冊成功,但這個帳號還在等待驗證,請聯絡管理員。' : '註冊成功!請直接登入。')
       }
     } catch (err) {
-      setError(err.message || '登入失敗')
+      setError(err.message || '操作失敗')
     } finally {
       setBusy(false)
     }
@@ -42,44 +49,62 @@ export default function Login() {
 
   return (
     <div className="pt-safe pb-safe mx-auto flex min-h-full max-w-md flex-col justify-center px-6">
-      <div className="mb-10 text-center">
+      <div className="mb-8 text-center">
         <div className="hero mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl text-4xl shadow-lg">🎯</div>
         <h1 className="text-2xl font-bold text-ink">發任務用ㄉ東西</h1>
         <p className="mt-1 text-sm text-muted">雙人任務與獎勵管理</p>
       </div>
 
-      {!who ? (
-        <div className="space-y-3">
-          <p className="text-center text-sm text-muted">請選擇你的身分</p>
-          {CODES.map((u) => (
-            <button key={u} onClick={() => setWho(u)} className="card w-full py-5 text-lg font-semibold text-ink transition active:bg-surface-2">
-              我是 {USERS[u].name}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-base font-semibold text-ink">我是 {USERS[who].name}</span>
-            <button type="button" onClick={() => { setWho(null); setPassword(''); setError('') }} className="text-sm text-primary">
-              換一個身分
-            </button>
-          </div>
-          <input
-            type="password"
-            autoFocus
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="輸入密碼"
-            className="input py-3.5 text-lg"
-          />
-          {error && <p className="text-sm text-danger">{error}</p>}
-          <button type="submit" disabled={busy || !password} className="btn-primary w-full py-3.5 text-lg">
-            {busy ? '登入中…' : '登入'}
+      <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-surface-2 p-1">
+        {[
+          ['login', '登入'],
+          ['signup', '註冊新帳號'],
+        ].map(([m, label]) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => { setMode(m); setError(''); setNotice('') }}
+            className={`rounded-xl py-2 text-sm font-semibold transition ${mode === m ? 'bg-surface text-ink shadow-sm' : 'text-muted'}`}
+          >
+            {label}
           </button>
-        </form>
-      )}
+        ))}
+      </div>
+
+      <form onSubmit={onSubmit} className="space-y-3">
+        <input
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          required
+          // 登入也接受完整 email(相容舊方式),註冊只接受帳號
+          pattern={mode === 'signup' ? '[a-zA-Z0-9_\\-]{2,30}' : undefined}
+          title="2-30 個英文字母、數字、下底線或減號"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder={mode === 'login' ? '帳號' : '設定帳號(英文字母 / 數字 / _ -,2-30 字)'}
+          className="input py-3.5"
+        />
+        <input
+          type="password"
+          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+          required
+          minLength={mode === 'signup' ? 6 : undefined}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={mode === 'login' ? '密碼' : '設定密碼(至少 6 個字元)'}
+          className="input py-3.5"
+        />
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {notice && <p className="rounded-xl bg-success-soft px-3 py-2 text-sm text-success">{notice}</p>}
+        <button type="submit" disabled={busy || !username || !password} className="btn-primary w-full py-3.5 text-lg">
+          {busy ? '請稍候…' : mode === 'login' ? '登入' : '建立帳號'}
+        </button>
+      </form>
+
+      <p className="mt-6 text-center text-xs text-muted">登入後可建立新的組別,或用另一半給你的邀請碼加入。</p>
     </div>
   )
 }

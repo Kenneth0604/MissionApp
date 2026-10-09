@@ -82,7 +82,8 @@ Deno.serve(async (req) => {
 async function buildNotices(p: WebhookPayload): Promise<Notice[]> {
   const rec = p.record
   if (!rec) return []
-  const users = await loadUsers()
+  const users = await loadUsers(rec)
+  if (Object.keys(users).length === 0) return []
   const name = (id: string) => users[id] ?? '對方'
 
   if (p.table === 'tasks') {
@@ -157,7 +158,27 @@ async function buildNotices(p: WebhookPayload): Promise<Notice[]> {
   return []
 }
 
-async function loadUsers(): Promise<Record<string, string>> {
+/**
+ * 只載入「這筆資料所屬那一組」的成員(每組兩人),避免推播發到別組。
+ * 資料列都有 pair_id(0019);保險起見沒有時用建立者 / 申請者反查所屬組。
+ */
+async function loadUsers(rec: Row): Promise<Record<string, string>> {
+  let pairId: string | null = rec.pair_id ?? null
+  if (!pairId) {
+    const owner = rec.created_by ?? rec.requested_by ?? rec.user_id ?? null
+    if (owner) {
+      const { data, error } = await supabase.from('users').select('pair_id').eq('id', owner).maybeSingle()
+      // 資料庫尚未執行 0019(沒有 pair_id 欄位):只有原本那一組,沿用舊行為載入全部成員
+      if (error) return loadAllUsers()
+      pairId = data?.pair_id ?? null
+    }
+  }
+  if (!pairId) return {}
+  const { data } = await supabase.from('users').select('id, code, name').eq('pair_id', pairId)
+  return Object.fromEntries((data ?? []).map((u) => [u.id, u.name || u.code]))
+}
+
+async function loadAllUsers(): Promise<Record<string, string>> {
   const { data } = await supabase.from('users').select('id, code, name')
   return Object.fromEntries((data ?? []).map((u) => [u.id, u.name || u.code]))
 }

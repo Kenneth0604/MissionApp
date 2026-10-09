@@ -1,6 +1,6 @@
 # 發任務用ㄉ東西(MissionApp)
 
-雙人任務 / 獎勵管理 PWA。A、B 兩人可互相派發任務、審核完成情況,並透過積分兌換實體獎勵。
+雙人任務 / 獎勵管理 PWA。任何人都可以註冊帳號,兩人一組(用邀請碼配對),組內兩人可互相派發任務、審核完成情況,並透過積分兌換實體獎勵;各組資料完全隔離。
 在 iPhone 上「加入主畫面」後即可當成獨立 App 使用,並可接收推播通知。
 
 - 前端:React 19 + Vite 8 + Tailwind CSS v4(HashRouter)
@@ -14,7 +14,8 @@
 
 | 區塊 | 內容 |
 | --- | --- |
-| 登入 | 選「我是 沼王 / 我是 土王」+ 密碼。密碼由 Supabase Auth 以 bcrypt 雜湊儲存 |
+| 登入 | 帳號 + 密碼,可自行註冊。密碼由 Supabase Auth 以 bcrypt 雜湊儲存 |
+| 組別 | 註冊後「建立新組」取得 6 碼邀請碼,另一人註冊後「輸入邀請碼」加入;每組固定兩人(組內代號 A / B) |
 | 任務 | 建立 / 編輯(標題、類別、說明、圖片、指派對象、獎勵、期限、重複)、標記完成、核准 / 退回(附原因) |
 | 任務獎勵 | 可選「積分」或「指定獎勵目錄中的獎勵」;指定獎勵在核准後自動變成一筆待交付兌換,不扣點 |
 | 重複任務 | 每天 / 每週幾;**核准後**才產生下一期;可停用 |
@@ -49,24 +50,25 @@ requested(待確認)→ fulfilled(已交付:扣點、扣庫存)
 1. 到 <https://supabase.com/dashboard> 建立新專案(Region 選 Northeast Asia / Tokyo 較快)。
 2. 記下 **Project URL** 與 **anon public key**:Project Settings → API。
 
-### 2. 建立 A、B 兩個登入帳號
+### 2. 設定登入方式
 
-1. Authentication → Users → **Add user** → **Create new user**。
-2. 分別建立:
-   - Email `Kenneth_Lin@missionapp.app`,密碼自訂 → **沼王**(A)的登入密碼
-   - Email `Juniper_Kuo@missionapp.app`,密碼自訂 → **土王**(B)的登入密碼
-3. 兩個都勾選 **Auto Confirm User**。
-4. Authentication → Sign In / Providers → Email → 關閉 **Allow new users to sign up**(避免其他人註冊)。
+Authentication → Sign In / Providers:
 
-> 想改 email 或顯示名稱:同步修改 `supabase/migrations/0001_init.sql` 最底部的兩行,
-> 並在 GitHub repo 設定 Variables `VITE_USER_A_EMAIL` / `VITE_USER_A_NAME` / `VITE_USER_B_EMAIL` / `VITE_USER_B_NAME`(本機則放 `.env.local`)。
-> 顯示名稱也可以之後直接在 Table Editor 改 `users.name`,App 會以資料庫為準。
+1. 開啟 **Allow new users to sign up**(讓使用者自行註冊)。
+2. Email → 關閉 **Confirm email**。
+
+App 的「帳號」在底層會轉成 `帳號@missionapp.app` 這個不會收信的內部信箱(例如帳號 `Kenneth_Lin` → `kenneth_lin@missionapp.app`),
+所以一定要關閉 Confirm email,否則新帳號永遠收不到驗證信、無法登入。
+
+> 舊版是在 Dashboard 手動建立 `Kenneth_Lin@missionapp.app`、`Juniper_Kuo@missionapp.app` 兩個帳號;
+> 執行 `0019` 後這兩個帳號與既有資料會自動成為第一組,直接用帳號 `Kenneth_Lin` / `Juniper_Kuo` + 原密碼登入即可。
+> 顯示名稱可在 App 設定頁「改名」。
 
 ### 3. 執行 SQL migration
 
 1. SQL Editor → New query。
-2. 依序貼上並執行 `supabase/migrations/` 內的 `0001_init.sql`、`0003_categories_description.sql`、`0004_shared_tasks.sql`、`0005_category_hierarchy.sql`、`0006_task_priority.sql`、`0007_expire_on_miss.sql`、`0008_series_template.sql`、`0009_task_choices.sql`、`0010_help_double_reward.sql`、`0011_task_presets.sql`、`0012_preset_assignee.sql`、`0013_edit_any_withdraw.sql`、`0014_reward_redeemable.sql`、`0015_daily_note_autoapprove.sql`、`0016_daily_review_rollover.sql`、`0017_daily_no_review.sql`、`0018_priority_reminders.sql`。`0002_push_webhooks.sql` 是推播 webhook,與 `0018` 一樣內含 `PROJECT_REF` / `WEBHOOK_SECRET` 佔位符,需先替換再執行(見第 6 步)。
-3. 最後一行 `select` 應該列出 `A`、`B` 兩列。若是空的,代表 step 2 的 email 沒對上。
+2. 依序貼上並執行 `supabase/migrations/` 內的 `0001_init.sql`、`0003_categories_description.sql`、`0004_shared_tasks.sql`、`0005_category_hierarchy.sql`、`0006_task_priority.sql`、`0007_expire_on_miss.sql`、`0008_series_template.sql`、`0009_task_choices.sql`、`0010_help_double_reward.sql`、`0011_task_presets.sql`、`0012_preset_assignee.sql`、`0013_edit_any_withdraw.sql`、`0014_reward_redeemable.sql`、`0015_daily_note_autoapprove.sql`、`0016_daily_review_rollover.sql`、`0017_daily_no_review.sql`、`0018_priority_reminders.sql`、`0019_pairs_open_signup.sql`。`0002_push_webhooks.sql` 是推播 webhook,與 `0018` 一樣內含 `PROJECT_REF` / `WEBHOOK_SECRET` 佔位符,需先替換再執行(見第 6 步)。
+3. `0019` 最後一行 `select` 會列出每一組的邀請碼與成員。
 
 這份 SQL 會建立:資料表、RLS policy、所有 RPC 函式、`images` Storage bucket 與其 policy、Realtime publication、keep-alive 函式。
 
@@ -128,8 +130,6 @@ Repo → Settings → Secrets and variables → Actions → **New repository sec
 | `VITE_SUPABASE_ANON_KEY` | anon public key |
 | `VITE_VAPID_PUBLIC_KEY` | VAPID Public Key |
 
-(若改了 email 或名稱,另在 **Variables** 分頁加 `VITE_USER_A_EMAIL`、`VITE_USER_A_NAME`、`VITE_USER_B_EMAIL`、`VITE_USER_B_NAME`。)
-
 ### 2. 啟用 Pages
 
 Repo → Settings → Pages → Build and deployment → Source 選 **GitHub Actions**。
@@ -179,7 +179,7 @@ copy .env.example .env.local     # 填入 Supabase URL / anon key / VAPID public
 npm run dev
 ```
 
-開啟 <http://localhost:5173/MissionApp/>。同一瀏覽器只會保留一個登入身分,測試互動時可開一個一般視窗、一個無痕視窗分別登入 A 與 B。
+開啟 <http://localhost:5173/MissionApp/>。同一瀏覽器只會保留一個登入身分,測試互動時可開一個一般視窗、一個無痕視窗分別登入同一組的兩個帳號。
 
 ```bash
 npm run build      # 產出 dist/
@@ -230,11 +230,12 @@ src/
   lib/images.js            圖片壓縮與 Storage 上傳
   lib/toast.jsx            提示訊息
   components/              Layout、TaskCard、ImageUploader、CategoryPicker …
-  pages/                   Login、Dashboard、Tasks、TaskForm、TaskDetail、Points、
+  pages/                   Login、PairGate(建立 / 加入組別)、Dashboard、Tasks、TaskForm、TaskDetail、Points、
                            Rewards、RewardForm、Redemptions、Settings
 supabase/
   migrations/0001_init.sql        建表、RLS、RPC、Storage、Realtime、keep-alive
   migrations/0002_push_webhooks.sql  推播 webhook trigger
+  migrations/0019_pairs_open_signup.sql  開放註冊:組別、pair_id 隔離、邀請碼
   functions/push-notify/          Edge Function:發送 Web Push
 ```
 
@@ -242,12 +243,13 @@ supabase/
 
 ## 安全性設計
 
-- **身分**:Supabase Auth 兩個固定帳號;前端只保存 Supabase session(自動續期)。Sign up 已關閉,且所有 policy 都要求 `auth.uid()` 存在於 `users` 表,其他人即使註冊也讀不到任何資料。
+- **身分**:Supabase Auth 帳號 + 密碼,可自行註冊;前端只保存 Supabase session(自動續期)。
+- **組別隔離**:每個資料表都有 `pair_id`,由觸發器依擁有者自動填入(前端傳的值會被忽略、之後也不能修改),並檢查指派對象、類別、獎勵等關聯都屬於同一組;所有 policy 與 RPC 只允許存取 `pair_id = my_pair()` 的資料。還沒加入組別的帳號讀不到任何資料。
 - **RLS**:所有資料表啟用 RLS,並對 `anon` 角色 revoke 全部權限。
 - **積分**:`points_ledger` 沒有任何寫入 policy,只能由 `approve_task` / `fulfill_redemption` 等 `security definer` RPC 寫入;餘額永遠由 ledger 加總。
-- **狀態流轉**:`tasks.status` 只能透過 RPC 改變;建立者只能直接編輯 / 刪除 `pending` 狀態的任務。
-- **圖片**:`images` bucket 公開讀取(網址為不可猜測的 UUID),僅 A、B 可上傳 / 刪除;前端上傳前先縮至 1280px JPEG。
-- **推播**:Edge Function 以 `WEBHOOK_SECRET` 驗證來源;訂閱失效(404 / 410)會自動清除。
+- **狀態流轉**:`tasks.status` 只能透過 RPC 改變;只能直接編輯 / 刪除 `pending` / `rejected` 狀態的任務。
+- **圖片**:`images` bucket 公開讀取(網址為不可猜測的 UUID);只能上傳到自己的資料夾,只能刪除同組成員上傳的圖片;前端上傳前先縮至 1280px JPEG。
+- **推播**:Edge Function 以 `WEBHOOK_SECRET` 驗證來源,只推播給同一組的成員;訂閱失效(404 / 410)會自動清除。
 
 ## 替換 icon
 

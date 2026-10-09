@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useStore } from '../lib/store.jsx'
+import { otherUser, useStore } from '../lib/store.jsx'
 import { THEMES, useTheme } from '../lib/theme.jsx'
 import { useToast } from '../lib/toast.jsx'
 import { disablePush, enablePush, getCurrentSubscription, pushEnvironment } from '../lib/push.js'
@@ -7,12 +7,27 @@ import CategoryManager from '../components/CategoryManager.jsx'
 import TaskPresetManager from '../components/TaskPresetManager.jsx'
 
 export default function Settings() {
-  const { user, nameOf, userId, logout } = useStore()
+  const { user, username, nameOf, userId, logout, setMyName } = useStore()
   const { theme, setTheme } = useTheme()
   const toast = useToast()
   const [env, setEnv] = useState(pushEnvironment)
   const [subscribed, setSubscribed] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+
+  async function rename() {
+    const next = prompt('新的顯示名稱(對方看到的名字)', nameOf(user))
+    if (next == null || !next.trim() || next.trim() === nameOf(user)) return
+    setRenaming(true)
+    try {
+      await setMyName(next)
+      toast.success('已更新顯示名稱')
+    } catch (err) {
+      toast.error(err)
+    } finally {
+      setRenaming(false)
+    }
+  }
 
   useEffect(() => {
     getCurrentSubscription().then((s) => setSubscribed(Boolean(s))).catch(() => {})
@@ -106,16 +121,20 @@ export default function Settings() {
 
       <section>
         <h2 className="section-title">帳號</h2>
-        <div className="card flex items-center justify-between p-4">
-          <div>
-            <p className="font-semibold text-ink">{nameOf(user)}</p>
+        <div className="card flex items-center justify-between gap-3 p-4">
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-ink">{nameOf(user)}</p>
+            <p className="truncate text-xs text-muted">帳號 {username} · 和 {nameOf(otherUser(user))} 同一組</p>
             <p className="text-xs text-muted">登入狀態會保留在這台裝置</p>
           </div>
-          <button onClick={logout} className="btn-secondary py-2 text-sm">登出</button>
+          <div className="flex shrink-0 gap-2">
+            <button onClick={rename} disabled={renaming} className="btn-secondary py-2 text-sm">改名</button>
+            <button onClick={logout} className="btn-secondary py-2 text-sm">登出</button>
+          </div>
         </div>
       </section>
 
-      <p className="text-center text-xs text-muted">發任務用ㄉ東西 · 僅供兩人私人使用 · v{__APP_VERSION__}</p>
+      <p className="text-center text-xs text-muted">發任務用ㄉ東西 · 兩人一組私人使用 · v{__APP_VERSION__}</p>
     </div>
   )
 }

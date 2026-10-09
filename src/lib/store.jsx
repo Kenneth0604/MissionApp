@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { supabase, isConfigured, USER_EMAILS, USERS } from './supabase.js'
+import { supabase, isConfigured } from './supabase.js'
 import { deleteImages } from './images.js'
 import { applyLocal, newId } from './localApply.js'
 import { useToast } from './toast.jsx'
@@ -7,8 +7,11 @@ import { useToast } from './toast.jsx'
 /**
  * 資料層(Supabase 版,離線優先)
  * ----------------------------------------------------------------
- * - 身分:Supabase Auth 兩個固定帳號(A / B),登入畫面只選身分 + 密碼
- * - 讀取:直接 select 各資料表(受 RLS 保護,只有 A、B 能讀);最近一次結果快取在 localStorage,
+ * - 身分:帳號 + 密碼(Supabase Auth 底層仍是 email,帳號在前端轉成 帳號@AUTH_EMAIL_DOMAIN 這個不收信的內部信箱,
+ *        所以 Supabase 專案要關閉「Confirm email」);可自行註冊
+ * - 組別:兩人一組。註冊後建立新組(拿到邀請碼)或用邀請碼加入對方;組內兩人的代號為 A / B,
+ *        所有資料以 pair_id 隔離(RLS 只讀得到自己這一組)
+ * - 讀取:直接 select 各資料表;最近一次結果快取在 localStorage,
  *        開 App 先顯示快取,再背景更新
  * - 寫入:所有操作先套用到本機(樂觀更新)並放進 outbox,再背景依序同步到 Supabase;
  *        離線或失敗時保留在 outbox,連線恢復後自動重送;伺服器拒絕的操作會被丟棄並提示,
@@ -47,7 +50,7 @@ export const canHelp = (t, code) => !t.shared && t.assigned_to && t.assigned_to 
 export const isHelped = (t) => !t.shared && Boolean(t.assigned_to) && Boolean(t.completed_by) && t.completed_by !== t.assigned_to
 
 const StoreContext = createContext(null)
-const WATCHED_TABLES = ['tasks', 'points_ledger', 'rewards', 'redemptions', 'categories', 'task_presets']
+const WATCHED_TABLES = ['tasks', 'points_ledger', 'rewards', 'redemptions', 'categories', 'task_presets', 'users']
 const POLL_MS = 60_000
 const ROLLOVER_MS = 5 * 60_000 // 週期任務換日結算(備援)最多每 5 分鐘呼叫一次
 const MAX_TRIES = 10 // 在「有網路」的情況下同一筆操作連續失敗這麼多次就放棄,避免卡住整個同步佇列
@@ -55,6 +58,24 @@ const EMPTY = { tasks: [], ledger: [], rewards: [], redemptions: [], categories:
 const OUTBOX_KEY = 'missionapp:outbox'
 const USERS_KEY = 'missionapp:users'
 const cacheKey = (uid) => `missionapp:cache:${uid}`
+
+/**
+ * 帳號 → Supabase Auth email。沿用原本兩個帳號的網域,
+ * 所以舊帳號 Kenneth_Lin@missionapp.app 直接用帳號「Kenneth_Lin」+ 原密碼登入。
+ */
+const AUTH_EMAIL_DOMAIN = 'missionapp.app'
+const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{2,30}$/
+
+export function usernameToAuthEmail(username) {
+  const u = String(username || '').trim().toLowerCase()
+  if (!USERNAME_PATTERN.test(u)) throw new Error('帳號格式錯誤,請用 2-30 個英文字母、數字、下底線或減號')
+  return `${u}@${AUTH_EMAIL_DOMAIN}`
+}
+
+/** 從 Supabase Auth 的 email 還原顯示用的帳號(去掉內部網域) */
+export function authEmailToUsername(email) {
+  return String(email || '').split('@')[0]
+}
 
 const readJSON = (key, fallback) => {
   try {
@@ -74,10 +95,14 @@ const writeJSON = (key, value) => {
 
 function friendlyAuthError(err) {
   const m = err?.message || ''
-  if (/invalid login credentials/i.test(m)) return '密碼錯誤'
-  if (/email not confirmed/i.test(m)) return '帳號尚未啟用,請在 Supabase 後台確認 Auto Confirm'
+  if (/invalid login credentials/i.test(m)) return '帳號或密碼錯誤'
+  if (/email not confirmed/i.test(m)) return '帳號尚未啟用,請在 Supabase 後台關閉「Confirm email」'
+  if (/user already registered/i.test(m)) return '這個帳號已經註冊過了,請直接登入'
+  if (/password should be at least/i.test(m)) return '密碼至少需要 6 個字元'
+  if (/signups? not allowed|signup is disabled/i.test(m)) return '目前沒有開放註冊,請在 Supabase 後台開啟「Allow new users to sign up」'
   if (/rate limit/i.test(m)) return '嘗試太多次,請稍後再試'
-  return m || '登入失敗'
+  if (isNetworkError(err)) return '目前離線或連線失敗'
+  return m || '操作失敗'
 }
 
 function throwIf(error) {
@@ -114,6 +139,8 @@ export function StoreProvider({ children }) {
   const toast = useToast()
   const [authUser, setAuthUser] = useState(undefined) // undefined = 尚未得知
   const [users, setUsers] = useState(() => readJSON(USERS_KEY, []))
+  const [pair, setPair] = useState(null) // { id, invite_code }:自己這一組
+  const [membershipLoaded, setMembershipLoaded] = useState(false) // users 對照表已載入(含快取)
   const [raw, setRawState] = useState(EMPTY)
   const [ready, setReady] = useState(false)
   const [fatal, setFatal] = useState(null)
@@ -156,10 +183,22 @@ export function StoreProvider({ children }) {
     return () => data.subscription.unsubscribe()
   }, [])
 
-  const login = useCallback(async (code, password) => {
+  const login = useCallback(async (username, password) => {
     if (!isConfigured) throw new Error('尚未設定 Supabase 環境變數')
-    const { error } = await supabase.auth.signInWithPassword({ email: USER_EMAILS[code], password })
+    const input = String(username || '').trim()
+    // 也接受直接輸入完整 email(相容舊的登入方式)
+    const email = input.includes('@') ? input.toLowerCase() : usernameToAuthEmail(input)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw new Error(friendlyAuthError(error))
+  }, [])
+
+  const signup = useCallback(async (username, password) => {
+    if (!isConfigured) throw new Error('尚未設定 Supabase 環境變數')
+    const email = usernameToAuthEmail(username) // 拋錯訊息已經是中文
+    const { data, error } = await supabase.auth.signUp({ email, password })
+    if (error) throw new Error(friendlyAuthError(error))
+    // 專案若開啟「Confirm email」,signUp 不會回 session(內部信箱收不到驗證信,務必關閉此設定)
+    return { needsConfirm: !data.session }
   }, [])
 
   const logout = useCallback(async () => {
@@ -170,6 +209,9 @@ export function StoreProvider({ children }) {
     setReady(false)
     setRaw(EMPTY)
     setFatal(null)
+    setUsers([])
+    setPair(null)
+    setMembershipLoaded(false)
     await supabase?.auth.signOut()
   }, [setRaw, setOutbox])
 
@@ -187,27 +229,42 @@ export function StoreProvider({ children }) {
       lastRollover.current = Date.now()
       await supabase.rpc('rollover_recurring_tasks').then(() => {}, () => {})
     }
-    const [t, l, r, d, c, p] = await Promise.all([
+    const [t, l, r, d, c, p, u, pr] = await Promise.all([
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('points_ledger').select('*').order('created_at', { ascending: false }),
       supabase.from('rewards').select('*').order('created_at', { ascending: true }),
       supabase.from('redemptions').select('*').order('created_at', { ascending: false }),
       supabase.from('categories').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
       supabase.from('task_presets').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
+      // RLS 只回傳自己這一組的成員 / 組別
+      supabase.from('users').select('id, code, name').order('code'),
+      supabase.from('pairs').select('id, invite_code').maybeSingle(),
     ])
-    throwIf(t.error || l.error || r.error || d.error || c.error || p.error)
-    return { tasks: t.data, ledger: l.data, rewards: r.data, redemptions: d.data, categories: c.data, presets: p.data }
+    throwIf(t.error || l.error || r.error || d.error || c.error || p.error || u.error)
+    return {
+      data: { tasks: t.data, ledger: l.data, rewards: r.data, redemptions: d.data, categories: c.data, presets: p.data },
+      users: u.data ?? [],
+      pair: pr.error ? null : pr.data ?? null, // 組別只用來顯示邀請碼,讀不到不影響其他功能
+    }
+  }, [])
+
+  const applyMembership = useCallback((list, pairRow) => {
+    setUsers(list)
+    writeJSON(USERS_KEY, list)
+    setPair(pairRow)
+    setMembershipLoaded(true)
   }, [])
 
   /** 重新抓取;若還有未同步的操作,先不覆蓋本機狀態(等 flush 完成後再抓) */
   const refresh = useCallback(async () => {
     if (!supabase || !authRef.current) return
     if (outboxRef.current.length > 0) return
-    const data = await fetchAll()
+    const res = await fetchAll()
     if (outboxRef.current.length > 0) return // 抓取期間又有新操作:以本機為準
-    setRaw(data)
+    setRaw(res.data)
+    applyMembership(res.users, res.pair)
     setOffline(false)
-  }, [fetchAll, setRaw])
+  }, [fetchAll, setRaw, applyMembership])
 
   // ---------- 同步 outbox ----------
   const flush = useCallback(async () => {
@@ -297,23 +354,23 @@ export function StoreProvider({ children }) {
       rawRef.current = cached
       setRawState(cached)
       setUsers(cachedUsers)
+      setMembershipLoaded(true)
       setReady(true)
+    } else {
+      setMembershipLoaded(false)
     }
 
     ;(async () => {
       try {
-        const { data: list, error } = await supabase.from('users').select('id, code, name').order('code')
-        throwIf(error)
-        if (cancelled) return
-        if (!list.some((u) => u.id === authUser.id)) {
-          setFatal('此帳號尚未加入 users 資料表(A / B),請依 README 完成設定。')
-          return
-        }
-        setUsers(list)
-        writeJSON(USERS_KEY, list)
+        // 先把離線時累積的操作送出,再抓最新資料(含成員對照表);
+        // 還有送不出去的操作時不覆蓋本機資料,只更新成員對照表
         if (outboxRef.current.length > 0) await flush()
-        else await refresh()
-        if (!cancelled) setReady(true)
+        const res = await fetchAll()
+        if (cancelled) return
+        if (outboxRef.current.length === 0) setRaw(res.data)
+        applyMembership(res.users, res.pair)
+        setOffline(false)
+        setReady(true)
       } catch (e) {
         if (cancelled) return
         const isOffline = isNetworkError(e)
@@ -348,17 +405,53 @@ export function StoreProvider({ children }) {
       window.removeEventListener('offline', onOffline)
       supabase.removeChannel(channel)
     }
-  }, [authUser, refresh, flush, scheduleRefresh, attempt, setOutbox, toast])
+  }, [authUser, refresh, flush, fetchAll, applyMembership, setRaw, scheduleRefresh, attempt, setOutbox, toast])
+
+  // ---------- 組別 ----------
+  /** 建立 / 加入組別後立刻重抓(不經 outbox,需要連線) */
+  const reloadMembership = useCallback(async () => {
+    const res = await fetchAll()
+    if (outboxRef.current.length === 0) setRaw(res.data)
+    applyMembership(res.users, res.pair)
+  }, [fetchAll, setRaw, applyMembership])
+
+  const createPair = useCallback(
+    async (displayName) => {
+      const { error } = await supabase.rpc('create_pair', { p_display_name: displayName })
+      if (error) throw new Error(friendlyAuthError(error))
+      await reloadMembership()
+    },
+    [reloadMembership],
+  )
+  const joinPair = useCallback(
+    async (code, displayName) => {
+      const { error } = await supabase.rpc('join_pair', { p_code: code, p_display_name: displayName })
+      if (error) throw new Error(friendlyAuthError(error))
+      await reloadMembership()
+    },
+    [reloadMembership],
+  )
+  const setMyName = useCallback(
+    async (name) => {
+      const { error } = await supabase.rpc('set_my_name', { p_name: name })
+      if (error) throw new Error(friendlyAuthError(error))
+      await reloadMembership()
+    },
+    [reloadMembership],
+  )
 
   // ---------- 對照與正規化 ----------
   const me = users.find((u) => u.id === authUser?.id) ?? null
   const user = me?.code ?? null
   const userId = me?.id ?? null
+  /** 'none' = 還沒加入組別;'waiting' = 已建立組別、等對方加入;'ok' = 兩人到齊 */
+  const pairStatus = !membershipLoaded ? null : !me ? 'none' : users.length < 2 ? 'waiting' : 'ok'
+  const username = authEmailToUsername(authUser?.email)
   const codeOf = useCallback((id) => users.find((u) => u.id === id)?.code ?? '?', [users])
   const idOf = useCallback((code) => users.find((u) => u.code === code)?.id ?? null, [users])
-  /** 顯示名稱:優先用 users 資料表的 name,否則用靜態設定 */
+  /** 顯示名稱:users 資料表的 name */
   const nameOf = useCallback(
-    (code) => users.find((u) => u.code === code)?.name || USERS[code]?.name || code || '?',
+    (code) => users.find((u) => u.code === code)?.name || code || '?',
     [users],
   )
 
@@ -625,13 +718,20 @@ export function StoreProvider({ children }) {
       configured: isConfigured,
       authLoading: authUser === undefined,
       authUser,
+      username,
       user,
       userId,
       users,
       nameOf,
+      pair,
+      pairStatus,
+      createPair,
+      joinPair,
+      setMyName,
       ready,
       fatal,
       login,
+      signup,
       logout,
       retry,
       refresh,
@@ -673,7 +773,8 @@ export function StoreProvider({ children }) {
       deleteCategory,
     }),
     [
-      authUser, user, userId, users, nameOf, ready, fatal, login, logout, retry, refresh,
+      authUser, username, user, userId, users, nameOf, pair, pairStatus, createPair, joinPair, setMyName,
+      ready, fatal, login, signup, logout, retry, refresh,
       outbox.length, offline, syncing, flush,
       tasks, ledger, rewards, redemptions, categories, categoriesById, presets, createPreset, updatePreset, deletePreset, balanceOf, reservedOf,
       createTask, updateTask, updateSeries, deleteTask, setTaskDueDate, submitTask, setTaskNote, approveTask, withdrawTask, rejectTask, stopRecurrence,

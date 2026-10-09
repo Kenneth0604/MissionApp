@@ -15,10 +15,11 @@ import RewardForm from './pages/RewardForm.jsx'
 import Redemptions from './pages/Redemptions.jsx'
 import Settings from './pages/Settings.jsx'
 import SetupNeeded from './pages/SetupNeeded.jsx'
+import PairGate from './pages/PairGate.jsx'
 import Splash from './components/Splash.jsx'
 
 export default function App() {
-  const { configured, authLoading, authUser, ready, fatal, retry, logout } = useStore()
+  const { configured, authLoading, authUser, ready, fatal, retry, logout, pairStatus } = useStore()
 
   if (!configured) return <SetupNeeded />
   if (authLoading) return <Splash />
@@ -32,7 +33,17 @@ export default function App() {
   }
 
   if (fatal) return <Splash error={fatal} onRetry={retry} onLogout={logout} />
-  if (!ready) return <Splash />
+  if (!ready || !pairStatus) return <Splash />
+
+  // 還沒加入組別,或在等另一個人加入
+  if (pairStatus !== 'ok') {
+    return (
+      <Routes>
+        <Route path="join/:code" element={<PairGate />} />
+        <Route path="*" element={<PairGate />} />
+      </Routes>
+    )
+  }
 
   return (
     <Routes>
