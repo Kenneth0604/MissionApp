@@ -5,7 +5,7 @@ import { itemInfo } from './itemInfo.js'
 
 const BREAKS = [5, 10, 15]
 
-/** 任務池:先建立主類別,再從類別點 ＋ 新增任務 */
+/** 任務池:先建立主類別,再從類別新增次類別,再從次類別新增任務 */
 export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onAppend }) {
   const { drag, bind } = useDrag()
   const [open, setOpen] = useState(true)
@@ -14,10 +14,13 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
   const [expanded, setExpanded] = useState(() => new Set())
   const [addingGroup, setAddingGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
-  const [addingItem, setAddingItem] = useState(null) // groupId
+  const [addingSub, setAddingSub] = useState(null) // groupId
+  const [subName, setSubName] = useState('')
+  const [addingItem, setAddingItem] = useState(null) // { groupId, sub }
   const [itemTitle, setItemTitle] = useState('')
   const [itemMinutes, setItemMinutes] = useState('')
   const groupInputRef = useRef(null)
+  const subInputRef = useRef(null)
   const itemInputRef = useRef(null)
   const scheduled = scheduledIds(state)
   const left = state.items.filter((it) => !scheduled.has(it.id)).length
@@ -44,18 +47,36 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
     setAddingGroup(false)
   }
 
-  const startAddItem = (gid) => {
-    setAddingItem(gid)
+  const startAddSub = (gid) => {
+    setAddingSub(gid)
+    setSubName('')
+    setTimeout(() => subInputRef.current?.focus(), 0)
+  }
+
+  const submitSub = (e, gid) => {
+    e.preventDefault()
+    const name = subName.trim()
+    if (!name) return
+    dispatch({ type: 'addItem', groupId: gid, sub: name, title: '新任務', minutes: null })
+    done(`已新增次類別「${name}」`)
+    setAddingSub(null)
+    setSubName('')
+    setExpanded((prev) => { const n = new Set(prev); n.add(gid); return n })
+  }
+
+  const startAddItem = (gid, sub) => {
+    setAddingItem({ groupId: gid, sub })
     setItemTitle('')
     setItemMinutes('')
     setTimeout(() => itemInputRef.current?.focus(), 0)
   }
 
-  const submitItem = (e, gid) => {
+  const submitItem = (e) => {
     e.preventDefault()
+    if (!addingItem) return
     const title = itemTitle.trim()
     if (!title) return
-    dispatch({ type: 'addItem', groupId: gid, title, minutes: itemMinutes || null })
+    dispatch({ type: 'addItem', groupId: addingItem.groupId, sub: addingItem.sub, title, minutes: itemMinutes || null })
     done(`已新增「${title}」`)
     setAddingItem(null)
     setItemTitle('')
@@ -142,79 +163,98 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
           const isExpanded = expanded.has(g.id)
           return (
             <div key={g.id} className="rounded-2xl p-3" style={{ background: tint(g.color, 9) }}>
-              <button
-                onClick={() => toggleExpanded(g.id)}
-                className="mb-1 flex w-full items-center gap-2 text-left"
-              >
-                <button onClick={(e) => { e.stopPropagation(); onOpenGroup(g.id) }} className="h-4 w-4 shrink-0 rounded-full ring-2 ring-white/70" style={{ background: g.color }} aria-label="編輯類別" />
-                <span className="truncate text-[15px] font-bold" style={{ color: g.color }}>{g.name}</span>
+              <div className="mb-1 flex items-center gap-2">
+                <button onClick={() => onOpenGroup(g.id)} className="h-4 w-4 shrink-0 rounded-full ring-2 ring-white/70" style={{ background: g.color }} aria-label="編輯類別" />
+                <button onClick={() => onOpenGroup(g.id)} className="truncate text-[15px] font-bold text-left" style={{ color: g.color }}>{g.name}</button>
                 <span className="text-xs text-muted">{rest.length}/{all.length}</span>
                 <button
-                  onClick={(e) => { e.stopPropagation(); startAddItem(g.id) }}
+                  onClick={() => startAddSub(g.id)}
                   className="ml-auto shrink-0 text-xs font-semibold text-primary"
                 >
-                  ＋ 新增
+                  ＋ 新增次類別
                 </button>
-                <span className="ml-1 text-xs text-muted">{isExpanded ? '▾' : '▸'}</span>
-              </button>
+                <button onClick={() => toggleExpanded(g.id)} className="text-xs text-muted">
+                  {isExpanded ? '▾' : '▸'}
+                </button>
+              </div>
 
-              {/* 新增任務表單 */}
-              {addingItem === g.id && (
-                <form onSubmit={(e) => submitItem(e, g.id)} className="mb-2 flex flex-wrap items-center gap-1.5 rounded-xl bg-surface-2 p-2">
+              {/* 新增次類別表單 */}
+              {addingSub === g.id && (
+                <form onSubmit={(e) => submitSub(e, g.id)} className="mb-2 flex gap-2 rounded-xl bg-surface-2 p-2">
                   <input
-                    ref={itemInputRef}
+                    ref={subInputRef}
                     className="input min-w-0 flex-1 !py-1.5 !text-sm"
-                    placeholder="任務名稱"
-                    value={itemTitle}
-                    onChange={(e) => setItemTitle(e.target.value)}
+                    placeholder="次類別名稱"
+                    value={subName}
+                    onChange={(e) => setSubName(e.target.value)}
                     autoFocus
                   />
-                  <div className="flex items-center gap-1">
-                    {[5, 10, 15, 30].map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setItemMinutes(itemMinutes === m ? '' : m)}
-                        className={`chip !py-0.5 text-[11px] ${Number(itemMinutes) === m ? 'chip-active' : ''}`}
-                      >
-                        {m}分
-                      </button>
-                    ))}
-                  </div>
-                  <button className="btn-primary !px-2.5 !py-1 text-xs" disabled={!itemTitle.trim()}>新增</button>
-                  <button type="button" className="btn-secondary !px-2.5 !py-1 text-xs" onClick={() => setAddingItem(null)}>取消</button>
+                  <button className="btn-primary !px-2.5 !py-1 text-xs" disabled={!subName.trim()}>新增</button>
+                  <button type="button" className="btn-secondary !px-2.5 !py-1 text-xs" onClick={() => setAddingSub(null)}>取消</button>
                 </form>
               )}
 
               {isExpanded && (
-                rest.length === 0 ? (
-                  <p className="text-xs text-muted">{all.length ? '全部排進去了 ✓' : '還沒有任務'}</p>
+                rest.length === 0 && subs.length === 0 ? (
+                  <p className="text-xs text-muted">還沒有次類別</p>
                 ) : (
                   <div className="space-y-2">
                     {subs.map((sub) => {
                       const its = rest.filter((it) => it.sub === sub)
-                      if (!its.length) return null
-                      const info = itemInfo(state, its[0])
+                      const info = its.length ? itemInfo(state, its[0]) : null
                       return (
                         <div key={sub || '__none'}>
-                          {sub && (
-                            <button onClick={() => startAddItem(g.id)} className="mb-1 text-[11px] font-semibold" style={{ color: info.shade }}>
-                              › {sub}
+                          <div className="mb-1 flex items-center gap-1">
+                            {sub && <span className="text-[11px] font-semibold" style={{ color: info?.shade }}>› {sub}</span>}
+                            <button
+                              onClick={() => startAddItem(g.id, sub)}
+                              className="ml-auto shrink-0 text-xs text-primary"
+                            >
+                              ＋
                             </button>
-                          )}
-                          <div className="flex flex-wrap gap-1.5">
-                            {its.map((it) => (
-                              <Chip
-                                key={it.id}
-                                bindProps={bind({ type: 'item', itemId: it.id })}
-                                color={info.shade}
-                                label={it.title}
-                                minutes={it.minutes}
-                                onOpen={() => onOpenItem(it.id)}
-                                onAdd={() => onAppend({ type: 'item', itemId: it.id })}
-                              />
-                            ))}
                           </div>
+                          {its.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {its.map((it) => (
+                                <Chip
+                                  key={it.id}
+                                  bindProps={bind({ type: 'item', itemId: it.id })}
+                                  color={info.shade}
+                                  label={it.title}
+                                  minutes={it.minutes}
+                                  onOpen={() => onOpenItem(it.id)}
+                                  onAdd={() => onAppend({ type: 'item', itemId: it.id })}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          {/* 新增任務表單 */}
+                          {addingItem && addingItem.groupId === g.id && addingItem.sub === sub && (
+                            <form onSubmit={submitItem} className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-xl bg-surface-2 p-2">
+                              <input
+                                ref={itemInputRef}
+                                className="input min-w-0 flex-1 !py-1.5 !text-sm"
+                                placeholder="任務名稱"
+                                value={itemTitle}
+                                onChange={(e) => setItemTitle(e.target.value)}
+                                autoFocus
+                              />
+                              <div className="flex items-center gap-1">
+                                {[5, 10, 15, 30].map((m) => (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => setItemMinutes(itemMinutes === m ? '' : m)}
+                                    className={`chip !py-0.5 text-[11px] ${Number(itemMinutes) === m ? 'chip-active' : ''}`}
+                                  >
+                                    {m}分
+                                  </button>
+                                ))}
+                              </div>
+                              <button className="btn-primary !px-2.5 !py-1 text-xs" disabled={!itemTitle.trim()}>新增</button>
+                              <button type="button" className="btn-secondary !px-2.5 !py-1 text-xs" onClick={() => setAddingItem(null)}>取消</button>
+                            </form>
+                          )}
                         </div>
                       )
                     })}

@@ -3,11 +3,10 @@ import { DEFAULT_FLAG_TIME, PALETTE, orderedItems, scheduledIds, subsOfGroup } f
 
 export function Sheet({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 pointer-events-none">
       <div
-        className="pb-safe w-full max-w-md space-y-4 rounded-t-3xl p-5"
+        className="pointer-events-auto max-h-[85vh] w-full max-w-md space-y-4 overflow-y-auto rounded-t-3xl p-5 pb-safe"
         style={{ background: 'var(--t-bg)' }}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-ink">{title}</h3>
