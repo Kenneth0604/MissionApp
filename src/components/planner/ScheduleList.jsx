@@ -143,9 +143,9 @@ export default function ScheduleList({ state, dispatch, onOpenItem, onOpenBreak,
           </button>
           <button
             className="chip ml-auto py-1 text-xs text-muted"
-            onClick={() => confirm('清掉所有資料,回到範例?') && dispatch({ type: 'reset' })}
+            onClick={() => confirm('載入範例資料?目前的資料會被清掉') && dispatch({ type: 'reset' })}
           >
-            範例
+            載入範例
           </button>
         </div>
       </div>

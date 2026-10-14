@@ -372,3 +372,7 @@ export const DEMO_TEXT = `作業/數學/第1-4題 15分
 export function demoState() {
   return addParsed({ groups: [], items: [], schedule: [], startTime: '19:00', timed: false }, parseQuickAdd(DEMO_TEXT))
 }
+
+export function emptyState() {
+  return { groups: [], items: [], schedule: [], startTime: '19:00', timed: false }
+}

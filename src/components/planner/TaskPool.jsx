@@ -11,12 +11,20 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
   const [open, setOpen] = useState(true)
   const [text, setText] = useState('')
   const [flash, setFlash] = useState('')
+  const [insertOpen, setInsertOpen] = useState(false)
+  const [expanded, setExpanded] = useState(() => new Set())
   const inputRef = useRef(null)
   const scheduled = scheduledIds(state)
   const left = state.items.filter((it) => !scheduled.has(it.id)).length
   const flagTime = parseTimeFlag(text)
   const preview = flagTime ? [] : parseQuickAdd(text)
   const returning = drag?.payload.type === 'entry' && drag.zone === 'pool'
+
+  const toggleExpanded = (id) => setExpanded((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
 
   const done = (msg) => {
     setFlash(msg)
@@ -35,7 +43,6 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
     if (!preview.length) return
     dispatch({ type: 'quickAdd', parsed: preview })
     done(`已新增 ${preview.length} 個小塊`)
-    // 保留類別前綴,方便連續輸入同一類
     const prefix = text.includes('/') ? text.slice(0, text.lastIndexOf('/') + 1) : ''
     setText(prefix)
     inputRef.current?.focus()
@@ -62,7 +69,7 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
         <span className="ml-auto text-xs text-muted sm:hidden">{open ? '收合 ▾' : '展開 ▴'}</span>
       </button>
 
-      <div data-scroll className={`min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 ${open ? 'flex' : 'hidden sm:flex'}`}>
+      <div className={`min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 ${open ? 'flex' : 'hidden sm:flex'}`}>
         <form onSubmit={submit} className="space-y-1.5">
           <div className="flex gap-2">
             <input
@@ -92,25 +99,33 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
           </p>
         </form>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-semibold text-muted">休息</span>
-          {BREAKS.map((m) => (
+        <button
+          type="button"
+          onClick={() => setInsertOpen((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-muted"
+        >
+          <span className="text-base leading-none">{insertOpen ? '▾' : '▸'}</span>
+          ＋ 插入休息／時間點
+        </button>
+        {insertOpen && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {BREAKS.map((m) => (
+              <Chip
+                key={m}
+                bindProps={bind({ type: 'break', minutes: m })}
+                color="var(--t-muted)"
+                label={`☕ ${m}分`}
+                onAdd={() => onAppend({ type: 'break', minutes: m })}
+              />
+            ))}
             <Chip
-              key={m}
-              bindProps={bind({ type: 'break', minutes: m })}
-              color="var(--t-muted)"
-              label={`☕ ${m}分`}
-              onAdd={() => onAppend({ type: 'break', minutes: m })}
+              bindProps={bind({ type: 'flag', time: DEFAULT_FLAG_TIME })}
+              color="var(--t-primary)"
+              label="🚩 時間"
+              onAdd={() => onAppend({ type: 'flag', time: DEFAULT_FLAG_TIME })}
             />
-          ))}
-          <span className="ml-1 text-[11px] font-semibold text-muted">時間點</span>
-          <Chip
-            bindProps={bind({ type: 'flag', time: DEFAULT_FLAG_TIME })}
-            color="var(--t-primary)"
-            label="🚩 時間"
-            onAdd={() => onAppend({ type: 'flag', time: DEFAULT_FLAG_TIME })}
-          />
-        </div>
+          </div>
+        )}
 
         {state.groups.length === 0 && <p className="empty py-6">先在上面輸入一些任務吧</p>}
 
@@ -118,47 +133,53 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
           const all = orderedItems(state, g.id)
           const subs = subsOfGroup(state, g.id)
           const rest = all.filter((it) => !scheduled.has(it.id))
+          const isExpanded = expanded.has(g.id)
           return (
             <div key={g.id} className="rounded-2xl p-3" style={{ background: tint(g.color, 9) }}>
-              <div className="mb-2 flex items-center gap-2">
-                <button onClick={() => onOpenGroup(g.id)} className="h-4 w-4 shrink-0 rounded-full ring-2 ring-white/70" style={{ background: g.color }} aria-label="編輯類別" />
-                <button onClick={() => onOpenGroup(g.id)} className="truncate text-[15px] font-bold" style={{ color: g.color }}>{g.name}</button>
+              <button
+                onClick={() => toggleExpanded(g.id)}
+                className="mb-1 flex w-full items-center gap-2 text-left"
+              >
+                <button onClick={(e) => { e.stopPropagation(); onOpenGroup(g.id) }} className="h-4 w-4 shrink-0 rounded-full ring-2 ring-white/70" style={{ background: g.color }} aria-label="編輯類別" />
+                <span className="truncate text-[15px] font-bold" style={{ color: g.color }}>{g.name}</span>
                 <span className="text-xs text-muted">{rest.length}/{all.length}</span>
-                <button onClick={() => prefill(`${g.name}/`)} className="ml-auto shrink-0 text-xs font-semibold text-primary">＋ 新增</button>
-              </div>
+                <span className="ml-auto text-xs text-muted">{isExpanded ? '▾' : '▸'}</span>
+              </button>
 
-              {rest.length === 0 ? (
-                <p className="text-xs text-muted">{all.length ? '全部排進去了 ✓' : '還沒有任務'}</p>
-              ) : (
-                <div className="space-y-2">
-                  {subs.map((sub) => {
-                    const its = rest.filter((it) => it.sub === sub)
-                    if (!its.length) return null
-                    const info = itemInfo(state, its[0])
-                    return (
-                      <div key={sub || '__none'}>
-                        {sub && (
-                          <button onClick={() => prefill(`${g.name}/${sub}/`)} className="mb-1 text-[11px] font-semibold" style={{ color: info.shade }}>
-                            › {sub}
-                          </button>
-                        )}
-                        <div className="flex flex-wrap gap-1.5">
-                          {its.map((it) => (
-                            <Chip
-                              key={it.id}
-                              bindProps={bind({ type: 'item', itemId: it.id })}
-                              color={info.shade}
-                              label={it.title}
-                              minutes={it.minutes}
-                              onOpen={() => onOpenItem(it.id)}
-                              onAdd={() => onAppend({ type: 'item', itemId: it.id })}
-                            />
-                          ))}
+              {isExpanded && (
+                rest.length === 0 ? (
+                  <p className="text-xs text-muted">{all.length ? '全部排進去了 ✓' : '還沒有任務'}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {subs.map((sub) => {
+                      const its = rest.filter((it) => it.sub === sub)
+                      if (!its.length) return null
+                      const info = itemInfo(state, its[0])
+                      return (
+                        <div key={sub || '__none'}>
+                          {sub && (
+                            <button onClick={() => prefill(`${g.name}/${sub}/`)} className="mb-1 text-[11px] font-semibold" style={{ color: info.shade }}>
+                              › {sub}
+                            </button>
+                          )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {its.map((it) => (
+                              <Chip
+                                key={it.id}
+                                bindProps={bind({ type: 'item', itemId: it.id })}
+                                color={info.shade}
+                                label={it.title}
+                                minutes={it.minutes}
+                                onOpen={() => onOpenItem(it.id)}
+                                onAdd={() => onAppend({ type: 'item', itemId: it.id })}
+                              />
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                )
               )}
             </div>
           )

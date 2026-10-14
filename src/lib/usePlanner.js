@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from 'react'
-import { demoState, reduce } from './planner.js'
+import { emptyState, reduce } from './planner.js'
 
 // 草稿階段先存在本機;正式整合時改接 store.jsx / Supabase
 const KEY = 'missionapp:planner-draft:v1'
@@ -11,7 +11,7 @@ function load() {
   } catch {
     /* ignore */
   }
-  return demoState()
+  return emptyState()
 }
 
 export function usePlanner() {
