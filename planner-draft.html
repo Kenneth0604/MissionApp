@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="blossom">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>排程草稿 · 發任務用ㄉ東西</title>
+    <meta name="theme-color" content="#e86aa8" />
+    <script>
+      try {
+        var t = localStorage.getItem('missionapp:theme');
+        if (t === 'graphite' || t === 'blossom' || t === 'apple') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- 本機草稿入口:不需要 Supabase,資料存在 localStorage -->
+    <script type="module" src="/src/planner-draft.jsx"></script>
+  </body>
+</html>

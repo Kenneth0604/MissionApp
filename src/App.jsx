@@ -14,6 +14,7 @@ import Rewards from './pages/Rewards.jsx'
 import RewardForm from './pages/RewardForm.jsx'
 import Redemptions from './pages/Redemptions.jsx'
 import Settings from './pages/Settings.jsx'
+import Planner from './pages/Planner.jsx'
 import SetupNeeded from './pages/SetupNeeded.jsx'
 import PairGate from './pages/PairGate.jsx'
 import Splash from './components/Splash.jsx'
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="rewards/:id/edit" element={<RewardForm />} />
         <Route path="redemptions" element={<Navigate to="/rewards?tab=redeem" replace />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="planner" element={<Planner />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

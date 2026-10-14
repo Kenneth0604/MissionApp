@@ -18,6 +18,7 @@ export default function Layout() {
     { to: '/tasks', label: '任務', icon: TaskIcon, badge: todo + review },
     { to: '/daily', label: '每日', icon: CalendarIcon, badge: dailyBadge },
     { to: '/rewards', label: '獎勵', icon: GiftIcon, badge: pendingRedemptions },
+    { to: '/planner', label: '排程', icon: ListIcon },
     { to: '/partner', label: nameOf(otherUser(user)), icon: UserIcon },
     { to: '/settings', label: '設定', icon: GearIcon },
   ]
@@ -78,7 +79,7 @@ export default function Layout() {
           backdropFilter: 'blur(40px) saturate(180%)',
         }} />
         <div className="relative" style={{ borderTop: '0.5px solid var(--t-line)' }}>
-          <div className="mx-auto grid max-w-md grid-cols-6 landscape:max-w-3xl">
+          <div className="mx-auto grid max-w-md grid-cols-7 landscape:max-w-3xl">
             {nav.map(({ to, label, icon: Icon, end, badge }) => (
               <NavLink
                 key={to}
@@ -149,6 +150,18 @@ function GearIcon({ className }) {
     <svg className={className} {...svgProps}>
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z" />
+    </svg>
+  )
+}
+function ListIcon({ className }) {
+  return (
+    <svg className={className} {...svgProps}>
+      <line x1="8" y1="6" x2="20" y2="6" />
+      <line x1="8" y1="12" x2="20" y2="12" />
+      <line x1="8" y1="18" x2="20" y2="18" />
+      <line x1="4" y1="6" x2="4.01" y2="6" />
+      <line x1="4" y1="12" x2="4.01" y2="12" />
+      <line x1="4" y1="18" x2="4.01" y2="18" />
     </svg>
   )
 }
