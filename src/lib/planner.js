@@ -278,6 +278,18 @@ export function reduce(state, a) {
     case 'quickAdd':
       return addParsed(state, a.parsed)
 
+    case 'addGroup': {
+      const groups = [...state.groups]
+      const g = ensureGroup(groups, a.name)
+      return { ...state, groups }
+    }
+
+    case 'addItem': {
+      const items = [...state.items]
+      items.push({ id: uid(), groupId: a.groupId, sub: a.sub ?? '', title: a.title, minutes: toMinutesOrNull(a.minutes) })
+      return { ...state, items }
+    }
+
     case 'updateItem': {
       const groups = [...state.groups]
       const g = ensureGroup(groups, a.groupName)

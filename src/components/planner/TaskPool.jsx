@@ -1,23 +1,26 @@
 import { useRef, useState } from 'react'
-import { DEFAULT_FLAG_TIME, orderedItems, parseQuickAdd, parseTimeFlag, scheduledIds, subsOfGroup, tint } from '../../lib/planner.js'
+import { DEFAULT_FLAG_TIME, orderedItems, scheduledIds, subsOfGroup, tint } from '../../lib/planner.js'
 import { useDrag } from '../../lib/dnd.jsx'
 import { itemInfo } from './itemInfo.js'
 
 const BREAKS = [5, 10, 15]
 
-/** 任務池:輸入任務、依三層類別分組顯示,拖到排程表或按 ＋ 加到最後 */
+/** 任務池:先建立主類別,再從類別點 ＋ 新增任務 */
 export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onAppend }) {
   const { drag, bind } = useDrag()
   const [open, setOpen] = useState(true)
-  const [text, setText] = useState('')
   const [flash, setFlash] = useState('')
   const [insertOpen, setInsertOpen] = useState(false)
   const [expanded, setExpanded] = useState(() => new Set())
-  const inputRef = useRef(null)
+  const [addingGroup, setAddingGroup] = useState(false)
+  const [groupName, setGroupName] = useState('')
+  const [addingItem, setAddingItem] = useState(null) // groupId
+  const [itemTitle, setItemTitle] = useState('')
+  const [itemMinutes, setItemMinutes] = useState('')
+  const groupInputRef = useRef(null)
+  const itemInputRef = useRef(null)
   const scheduled = scheduledIds(state)
   const left = state.items.filter((it) => !scheduled.has(it.id)).length
-  const flagTime = parseTimeFlag(text)
-  const preview = flagTime ? [] : parseQuickAdd(text)
   const returning = drag?.payload.type === 'entry' && drag.zone === 'pool'
 
   const toggleExpanded = (id) => setExpanded((prev) => {
@@ -31,27 +34,32 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
     setTimeout(() => setFlash(''), 1800)
   }
 
-  const submit = (e) => {
+  const submitGroup = (e) => {
     e.preventDefault()
-    if (flagTime) {
-      onAppend({ type: 'flag', time: flagTime }, { open: false })
-      done(`已在排程最後插入 🚩 ${flagTime}`)
-      setText('')
-      inputRef.current?.focus()
-      return
-    }
-    if (!preview.length) return
-    dispatch({ type: 'quickAdd', parsed: preview })
-    done(`已新增 ${preview.length} 個小塊`)
-    const prefix = text.includes('/') ? text.slice(0, text.lastIndexOf('/') + 1) : ''
-    setText(prefix)
-    inputRef.current?.focus()
+    const name = groupName.trim()
+    if (!name) return
+    dispatch({ type: 'addGroup', name })
+    done(`已新增主類別「${name}」`)
+    setGroupName('')
+    setAddingGroup(false)
   }
 
-  const prefill = (value) => {
-    setOpen(true)
-    setText(value)
-    setTimeout(() => inputRef.current?.focus(), 0)
+  const startAddItem = (gid) => {
+    setAddingItem(gid)
+    setItemTitle('')
+    setItemMinutes('')
+    setTimeout(() => itemInputRef.current?.focus(), 0)
+  }
+
+  const submitItem = (e, gid) => {
+    e.preventDefault()
+    const title = itemTitle.trim()
+    if (!title) return
+    dispatch({ type: 'addItem', groupId: gid, title, minutes: itemMinutes || null })
+    done(`已新增「${title}」`)
+    setAddingItem(null)
+    setItemTitle('')
+    setItemMinutes('')
   }
 
   return (
@@ -70,35 +78,33 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
       </button>
 
       <div className={`min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 ${open ? 'flex' : 'hidden sm:flex'}`}>
-        <form onSubmit={submit} className="space-y-1.5">
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              className="input !py-2.5 !text-[15px]"
-              placeholder="作業/數學/第1-5題 15分"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-            <button className="btn-primary shrink-0 !px-4 !py-2" disabled={!preview.length && !flagTime}>
-              {flagTime ? '插入' : '加入'}
-            </button>
-          </div>
-          <p className="px-1 text-[11px] leading-relaxed text-muted">
-            {flash ? (
-              <span className="font-semibold text-success">✓ {flash}</span>
-            ) : flagTime ? (
-              <>將在排程最後插入時間點 <b>🚩 {flagTime}</b>,後面的任務從這個時間開始算</>
-            ) : preview.length > 1 ? (
-              <>將新增 {preview.length} 個:{preview.slice(0, 4).map((p) => p.title).join('、')}{preview.length > 4 && '…'}</>
-            ) : (
-              <>
-                格式:主類別 / 次類別 / 任務,用 <b>1-5</b> 或 <b>一~五</b> 一次切多塊,結尾 <b>15分</b> 設時間(可不填);
-                只輸入 <b>12:00</b> 就插入時間點
-              </>
-            )}
-          </p>
-        </form>
+        {flash && <p className="px-1 text-[11px] font-semibold text-success">✓ {flash}</p>}
 
+        {/* 新增主類別 */}
+        {addingGroup ? (
+          <form onSubmit={submitGroup} className="flex gap-2">
+            <input
+              ref={groupInputRef}
+              className="input flex-1 !py-2 !text-sm"
+              placeholder="主類別名稱"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              autoFocus
+            />
+            <button className="btn-primary shrink-0 !px-3 !py-2 text-sm" disabled={!groupName.trim()}>新增</button>
+            <button type="button" className="btn-secondary shrink-0 !px-3 !py-2 text-sm" onClick={() => setAddingGroup(false)}>取消</button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => { setAddingGroup(true); setTimeout(() => groupInputRef.current?.focus(), 0) }}
+            className="flex items-center gap-1.5 text-xs font-semibold text-primary"
+          >
+            ＋ 新增主類別
+          </button>
+        )}
+
+        {/* 插入休息／時間點 */}
         <button
           type="button"
           onClick={() => setInsertOpen((v) => !v)}
@@ -127,7 +133,7 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
           </div>
         )}
 
-        {state.groups.length === 0 && <p className="empty py-6">先在上面輸入一些任務吧</p>}
+        {state.groups.length === 0 && <p className="empty py-6">先新增一個主類別吧</p>}
 
         {state.groups.map((g) => {
           const all = orderedItems(state, g.id)
@@ -143,8 +149,42 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
                 <button onClick={(e) => { e.stopPropagation(); onOpenGroup(g.id) }} className="h-4 w-4 shrink-0 rounded-full ring-2 ring-white/70" style={{ background: g.color }} aria-label="編輯類別" />
                 <span className="truncate text-[15px] font-bold" style={{ color: g.color }}>{g.name}</span>
                 <span className="text-xs text-muted">{rest.length}/{all.length}</span>
-                <span className="ml-auto text-xs text-muted">{isExpanded ? '▾' : '▸'}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); startAddItem(g.id) }}
+                  className="ml-auto shrink-0 text-xs font-semibold text-primary"
+                >
+                  ＋ 新增
+                </button>
+                <span className="ml-1 text-xs text-muted">{isExpanded ? '▾' : '▸'}</span>
               </button>
+
+              {/* 新增任務表單 */}
+              {addingItem === g.id && (
+                <form onSubmit={(e) => submitItem(e, g.id)} className="mb-2 flex flex-wrap items-center gap-1.5 rounded-xl bg-surface-2 p-2">
+                  <input
+                    ref={itemInputRef}
+                    className="input min-w-0 flex-1 !py-1.5 !text-sm"
+                    placeholder="任務名稱"
+                    value={itemTitle}
+                    onChange={(e) => setItemTitle(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-1">
+                    {[5, 10, 15, 30].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setItemMinutes(itemMinutes === m ? '' : m)}
+                        className={`chip !py-0.5 text-[11px] ${Number(itemMinutes) === m ? 'chip-active' : ''}`}
+                      >
+                        {m}分
+                      </button>
+                    ))}
+                  </div>
+                  <button className="btn-primary !px-2.5 !py-1 text-xs" disabled={!itemTitle.trim()}>新增</button>
+                  <button type="button" className="btn-secondary !px-2.5 !py-1 text-xs" onClick={() => setAddingItem(null)}>取消</button>
+                </form>
+              )}
 
               {isExpanded && (
                 rest.length === 0 ? (
@@ -158,7 +198,7 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
                       return (
                         <div key={sub || '__none'}>
                           {sub && (
-                            <button onClick={() => prefill(`${g.name}/${sub}/`)} className="mb-1 text-[11px] font-semibold" style={{ color: info.shade }}>
+                            <button onClick={() => startAddItem(g.id)} className="mb-1 text-[11px] font-semibold" style={{ color: info.shade }}>
                               › {sub}
                             </button>
                           )}

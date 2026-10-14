@@ -24,6 +24,7 @@ export default function ScheduleList({ state, dispatch, onOpenItem, onOpenBreak,
   const timed = Boolean(state.timed)
   const now = useNow()
   const scrollRef = useRef(null)
+  const [collapsed, setCollapsed] = useState(true)
   const rows = buildTimeline(state)
   const loc = locateNow(rows, now, timed)
   const pace = timed ? paceOf(rows, loc) : null
@@ -83,8 +84,16 @@ export default function ScheduleList({ state, dispatch, onOpenItem, onOpenBreak,
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="card space-y-3 p-3">
-        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex w-full items-center gap-2 text-left"
+        >
           <h2 className="text-[15px] font-bold text-ink">今天的排程</h2>
+          <span className="ml-auto text-xs text-muted">{collapsed ? '▸' : '▾'}</span>
+        </button>
+        {!collapsed && (<>
+        <div className="flex items-center gap-2">
           <div className="ml-auto flex items-center gap-1.5 text-xs text-muted">
             {timed && (
               <>
@@ -148,6 +157,7 @@ export default function ScheduleList({ state, dispatch, onOpenItem, onOpenBreak,
             載入範例
           </button>
         </div>
+        </>)}
       </div>
 
       <div
