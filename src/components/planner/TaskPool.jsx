@@ -86,7 +86,7 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
   return (
     <section
       data-dropzone="pool"
-      className={`card relative flex min-h-0 shrink-0 flex-col sm:max-h-none sm:w-[44%] sm:shrink ${open ? 'max-h-[50%]' : ''}`}
+      className="card relative flex shrink-0 flex-col sm:min-h-0 sm:w-[44%] sm:shrink"
     >
       <button
         type="button"
@@ -98,7 +98,7 @@ export default function TaskPool({ state, dispatch, onOpenItem, onOpenGroup, onA
         <span className="ml-auto text-xs text-muted sm:hidden">{open ? '收合 ▾' : '展開 ▴'}</span>
       </button>
 
-      <div className={`min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 ${open ? 'flex' : 'hidden sm:flex'}`}>
+      <div className={`flex-col gap-3 px-3 pb-3 sm:min-h-0 sm:flex-1 sm:overflow-y-auto ${open ? 'flex' : 'hidden sm:flex'}`}>
         {flash && <p className="px-1 text-[11px] font-semibold text-success">✓ {flash}</p>}
 
         {/* 新增主類別 */}

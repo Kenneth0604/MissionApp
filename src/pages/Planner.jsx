@@ -61,7 +61,8 @@ export default function Planner() {
 
   return (
     <DragProvider onDrop={handleDrop} renderGhost={renderGhost}>
-      <div className="flex h-full min-h-0 flex-col gap-3 sm:flex-row">
+      {/* 手機:一般頁面高度,由外層 main 整頁捲動(輸入時鍵盤彈出也能滑);寬螢幕:左右兩欄各自捲動 */}
+      <div className="flex flex-col gap-3 sm:h-full sm:min-h-0 sm:flex-row">
         <ScheduleList
           state={state}
           dispatch={dispatch}

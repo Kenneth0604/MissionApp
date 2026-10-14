@@ -10,10 +10,19 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
  */
 const DragContext = createContext(null)
 
+/** 從放置區往外找第一個真的能捲動的容器(手機上是整頁 main,寬螢幕是排程欄) */
+function scrollableOf(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    const oy = getComputedStyle(n).overflowY
+    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return n
+  }
+  return null
+}
+
 function locate(x, y) {
   const el = document.elementFromPoint(x, y)
   const zoneEl = el?.closest('[data-dropzone]')
-  if (!zoneEl) return { zone: null, index: -1, scrollEl: null }
+  if (!zoneEl) return { zone: null, index: -1, scrollEl: el ? scrollableOf(el) : null }
   const slots = [...zoneEl.querySelectorAll('[data-slot]')]
   let index = slots.length
   for (let i = 0; i < slots.length; i++) {
@@ -23,7 +32,9 @@ function locate(x, y) {
       break
     }
   }
-  return { zone: zoneEl.dataset.dropzone, index, scrollEl: zoneEl.closest('[data-scroll]') ?? zoneEl.querySelector('[data-scroll]') }
+  // 只往外找(不含放置區裡面的子容器),所以任務池自己的清單不會被拖曳帶著捲
+  const scrollEl = scrollableOf(zoneEl)
+  return { zone: zoneEl.dataset.dropzone, index, scrollEl }
 }
 
 export function DragProvider({ onDrop, renderGhost, children }) {

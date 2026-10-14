@@ -82,7 +82,7 @@ export default function ScheduleList({ state, dispatch, onOpenItem, onOpenBreak,
   }, [timed, hasNow])
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-3">
+    <section className="flex flex-col gap-3 sm:min-h-0 sm:flex-1">
       <div className="card space-y-3 p-3">
         <button
           type="button"
@@ -164,7 +164,7 @@ export default function ScheduleList({ state, dispatch, onOpenItem, onOpenBreak,
         ref={scrollRef}
         data-dropzone="schedule"
         data-scroll
-        className={`min-h-[8rem] flex-1 overflow-y-auto overflow-x-hidden rounded-2xl p-1 transition-colors ${drag && drag.zone === 'schedule' ? 'bg-primary-soft' : ''}`}
+        className={`min-h-[8rem] overflow-x-hidden rounded-2xl p-1 transition-colors sm:flex-1 sm:overflow-y-auto ${drag && drag.zone === 'schedule' ? 'bg-primary-soft' : ''}`}
       >
         {rows.length === 0 && !drag ? (
           <div className="empty flex h-full flex-col items-center justify-center gap-1 border-2 border-dashed border-line">
