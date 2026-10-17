@@ -1,6 +1,5 @@
 import { useEffect, useReducer } from 'react'
-import { dailyReset, emptyState, reduce } from './planner.js'
-import { appTodayISO } from './format.js'
+import { dailyReset, emptyState, plannerTodayISO, reduce } from './planner.js'
 
 // 草稿階段先存在本機;正式整合時改接 store.jsx / Supabase
 const KEY = 'missionapp:planner-draft:v1'
@@ -29,7 +28,7 @@ export function usePlanner() {
 
   // App 開著跨過凌晨 3 點、或從背景切回來時,也要換日清除
   useEffect(() => {
-    const check = () => dispatch({ type: 'dailyReset', today: appTodayISO() })
+    const check = () => dispatch({ type: 'dailyReset', today: plannerTodayISO() })
     const onVisible = () => document.visibilityState === 'visible' && check()
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', check)

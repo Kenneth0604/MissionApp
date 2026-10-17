@@ -7,7 +7,15 @@
 //   - 時間軸預設關閉(state.timed);開啟後才顯示每塊的開始時間
 //   - 旗標 { kind: 'flag', time: '12:00' } 把時間軸對齊到指定時間,後面的區塊從那裡接著算
 
-import { appTodayISO } from './format.js'
+// 排程換日時間:次日凌晨 4 點(與其他功能的「今天」無關,只管排程要不要清掉前一天的內容)
+export const PLANNER_DAY_START_HOUR = 4
+
+/** 排程的「今天」(YYYY-MM-DD):凌晨 4 點才換日,0~3:59 仍算前一天 */
+export function plannerTodayISO(now = Date.now()) {
+  const d = new Date(now - PLANNER_DAY_START_HOUR * 60 * 60 * 1000)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
 
 export const PALETTE = ['#e86aa8', '#7c5cd6', '#16a37a', '#f59e0b', '#3b82f6', '#14b8a6', '#ef4444', '#8b5e3c']
 export const DEFAULT_FLAG_TIME = '12:00'
@@ -394,11 +402,11 @@ export function reduce(state, a) {
 }
 
 /**
- * 每天換日(App 的「今天」,凌晨 3 點換日)清掉前一天的排程與待辦任務,只保留主類別(大標題)
+ * 每天換日(凌晨 4 點)清掉前一天的所有任務、次類別、細項與排程(不論完成與否),只保留主類別(大標題)
  *   - 次類別存在小塊上,小塊清掉後次類別也一併消失
  *   - 舊資料沒有 date 欄位:只蓋上今天的日期,不清資料(避免更新後突然把使用者今天的內容清空)
  */
-export function dailyReset(state, today = appTodayISO()) {
+export function dailyReset(state, today = plannerTodayISO()) {
   if (state.date === today) return state
   if (!state.date) return { ...state, date: today }
   return { ...state, date: today, items: [], schedule: [] }
@@ -419,5 +427,5 @@ export function demoState() {
 }
 
 export function emptyState() {
-  return { groups: [], items: [], schedule: [], startTime: '19:00', timed: false, date: appTodayISO() }
+  return { groups: [], items: [], schedule: [], startTime: '19:00', timed: false, date: plannerTodayISO() }
 }

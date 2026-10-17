@@ -15,6 +15,7 @@ import {
   paceOf,
   parseQuickAdd,
   parseTimeFlag,
+  plannerTodayISO,
   reduce,
 } from './planner.js'
 
@@ -81,6 +82,13 @@ describe('排程', () => {
     expect(s.schedule).toEqual([])
     expect(s.groups).toEqual(groups)
     expect(s.date).toBe('2099-01-01')
+  })
+
+  it('排程凌晨 4 點才換日', () => {
+    const at = (h, m = 0) => plannerTodayISO(new Date(2026, 9, 18, h, m).getTime())
+    expect(at(3, 59)).toBe('2026-10-17')
+    expect(at(4, 0)).toBe('2026-10-18')
+    expect(at(23, 30)).toBe('2026-10-18')
   })
 
   it('舊資料沒有 date 時只蓋日期,不清資料', () => {
