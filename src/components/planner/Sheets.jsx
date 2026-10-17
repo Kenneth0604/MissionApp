@@ -3,9 +3,13 @@ import { DEFAULT_FLAG_TIME, PALETTE, orderedItems, scheduledIds, subsOfGroup } f
 
 export function Sheet({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 pointer-events-none">
+    // 高度與位置跟著 visualViewport(--app-h / --app-top),鍵盤彈出時底部面板會貼在鍵盤上方而不是被蓋住
+    <div
+      className="fixed inset-x-0 z-40 flex items-end justify-center bg-black/40 pointer-events-none"
+      style={{ top: 'var(--app-top, 0px)', height: 'var(--app-h, 100%)' }}
+    >
       <div
-        className="pointer-events-auto max-h-[85vh] w-full max-w-md space-y-4 overflow-y-auto rounded-t-3xl p-5 pb-safe"
+        className="pointer-events-auto max-h-[85%] w-full max-w-md space-y-4 overflow-y-auto rounded-t-3xl p-5 pb-safe"
         style={{ background: 'var(--t-bg)' }}
       >
         <div className="flex items-center justify-between">
@@ -252,7 +256,7 @@ export function InterleaveSheet({ state, dispatch, onClose }) {
   return (
     <Sheet title="🔀 自動穿插" onClose={onClose}>
       <p className="text-sm text-muted">
-        把 {left} 個還沒排的小塊,依主類別輪流接到排程最後:
+        把 {left} 個還沒排的小塊,依主類別輪流接到排程最後,同一個主類別裡的次類別也會輪流:
         <br />
         <span className="font-semibold text-ink">{names.length ? [...names, names[0]].join(' → ') + ' → …' : '沒有可排的小塊'}</span>
       </p>

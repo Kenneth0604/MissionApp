@@ -3,7 +3,9 @@ import {
   addParsed,
   buildTimeline,
   cnToInt,
+  dailyReset,
   demoState,
+  emptyState,
   expandRange,
   fmtTime,
   interleave,
@@ -58,8 +60,35 @@ describe('排程', () => {
     const s = interleave(demoState(), { breakEvery: 3, breakMinutes: 5 })
     const byId = Object.fromEntries(s.items.map((i) => [i.id, i]))
     const seq = s.schedule.slice(0, 5).map((e) => (e.kind === 'break' ? '休息' : byId[e.itemId].title))
-    expect(seq).toEqual(['第1題', '拖地', '爬音階', '休息', '第2題'])
+    // 作業內次類別輪流:數學第1題 → 英文背單字(而不是數學第2題)
+    expect(seq).toEqual(['第1題', '拖地', '爬音階', '休息', '背單字'])
     expect(s.schedule.filter((e) => e.kind === 'task')).toHaveLength(s.items.length)
+  })
+
+  it('自動穿插:同一主類別內的次類別也輪流', () => {
+    const s0 = addParsed(emptyState(), parseQuickAdd('作業/數學/第1-3題\n作業/英文/單字\n作業/英文/閱讀'))
+    const s = interleave(s0)
+    const byId = Object.fromEntries(s.items.map((i) => [i.id, i]))
+    expect(s.schedule.map((e) => byId[e.itemId].title)).toEqual(['第1題', '單字', '第2題', '閱讀', '第3題'])
+  })
+
+  it('每天換日只清掉任務與排程,保留主類別', () => {
+    let s = interleave(demoState())
+    const groups = s.groups
+    expect(dailyReset(s, s.date)).toBe(s) // 同一天不動
+    s = reduce(s, { type: 'dailyReset', today: '2099-01-01' })
+    expect(s.items).toEqual([])
+    expect(s.schedule).toEqual([])
+    expect(s.groups).toEqual(groups)
+    expect(s.date).toBe('2099-01-01')
+  })
+
+  it('舊資料沒有 date 時只蓋日期,不清資料', () => {
+    const old = { ...interleave(demoState()), date: undefined }
+    const s = dailyReset(old, '2099-01-01')
+    expect(s.date).toBe('2099-01-01')
+    expect(s.items).toHaveLength(old.items.length)
+    expect(s.schedule).toHaveLength(old.schedule.length)
   })
 
   it('同一個小塊不會重複排入;移動與時間軸', () => {

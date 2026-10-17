@@ -1,32 +1,59 @@
 /**
- * iOS 主畫面 App 的視窗修正
- * 1. 高度:standalone 模式下 100% / 100vh / 100dvh 有時會少算底部安全區,底部露出一塊背景色。
- *    這裡直接量 window.innerHeight 寫進 --app-h,#root 以它為高度。
- * 2. 捲動偏移:鍵盤把視窗往上推後常常沒回位;body 是 fixed 不能捲,所以在鍵盤收起 / 尺寸變化時歸零。
+ * iOS Safari / 主畫面 App 的視窗修正
+ * 1. 高度:100% / 100vh / 100dvh 在 iOS 上不可靠(工具列、安全區、鍵盤)。
+ *    這裡量 visualViewport.height(沒有就用 innerHeight)寫進 --app-h,#root 以它為高度。
+ *    鍵盤彈出時 visualViewport 會縮小,內容區跟著縮小、變成可捲動,不會被鍵盤蓋住。
+ * 2. 位移:鍵盤彈出時 iOS 會把可視區域往下平移(visualViewport.offsetTop),
+ *    body 是 fixed 所以頁面本身捲不動,改用 --app-top 讓 #root 跟著可視區域走。
+ * 3. 鍵盤狀態:可視高度比版面高度少很多就在 <html> 加上 kb-open,CSS 據此收起頂欄與底部導覽,
+ *    把空間讓給表單。
+ * 4. 輸入框聚焦後,把它捲到可視範圍中間。
  */
 export function installViewportFix() {
   const root = document.documentElement
+  const vv = window.visualViewport
+  const KEYBOARD_MIN_PX = 120
 
-  const setHeight = () => {
-    const h = window.innerHeight
+  const apply = () => {
+    const h = Math.round(vv?.height || window.innerHeight)
     if (h > 0) root.style.setProperty('--app-h', `${h}px`)
+    const top = Math.max(0, Math.round(vv?.offsetTop || 0))
+    root.style.setProperty('--app-top', `${top}px`)
+    const keyboard = vv ? window.innerHeight - vv.height > KEYBOARD_MIN_PX : false
+    root.classList.toggle('kb-open', keyboard)
+    return keyboard
   }
+
   const reset = () => {
+    // 鍵盤開著時不要硬把視窗拉回 0,否則會和 Safari 把輸入框捲進可視區的動作打架
+    if (root.classList.contains('kb-open')) return
     if (window.scrollY || window.scrollX) window.scrollTo(0, 0)
     if (root.scrollTop) root.scrollTop = 0
     if (document.body.scrollTop) document.body.scrollTop = 0
   }
+
   const later = () => {
-    setHeight(); reset()
-    setTimeout(() => { setHeight(); reset() }, 60)
-    setTimeout(() => { setHeight(); reset() }, 300)
+    apply(); reset()
+    setTimeout(() => { apply(); reset() }, 60)
+    setTimeout(() => { apply(); reset() }, 300)
   }
 
-  setHeight()
+  const onFocusIn = (e) => {
+    const el = e.target
+    if (!(el instanceof HTMLElement) || !el.matches('input, textarea, select, [contenteditable="true"]')) return
+    // 等鍵盤動畫與 --app-h 更新完,再把輸入框捲到中間(捲的是 <main> 這類內部捲動容器)
+    setTimeout(() => {
+      apply()
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 350)
+  }
+
+  apply()
   window.addEventListener('resize', later)
   window.addEventListener('orientationchange', later)
   window.addEventListener('pageshow', later)
+  document.addEventListener('focusin', onFocusIn)
   document.addEventListener('focusout', later)
-  window.visualViewport?.addEventListener('resize', later)
-  window.visualViewport?.addEventListener('scroll', reset)
+  vv?.addEventListener('resize', later)
+  vv?.addEventListener('scroll', () => { apply(); reset() })
 }

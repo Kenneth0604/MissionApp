@@ -7,6 +7,8 @@
 //   - 時間軸預設關閉(state.timed);開啟後才顯示每塊的開始時間
 //   - 旗標 { kind: 'flag', time: '12:00' } 把時間軸對齊到指定時間,後面的區塊從那裡接著算
 
+import { appTodayISO } from './format.js'
+
 export const PALETTE = ['#e86aa8', '#7c5cd6', '#16a37a', '#f59e0b', '#3b82f6', '#14b8a6', '#ef4444', '#8b5e3c']
 export const DEFAULT_FLAG_TIME = '12:00'
 
@@ -157,14 +159,31 @@ export function addParsed(state, parsed) {
   return { ...state, groups, items }
 }
 
+/** 同一個主類別內,把小塊依「次類別」輪流排開(數學1 → 英文1 → 數學2 → ...) */
+function roundRobinBySub(items) {
+  const buckets = []
+  for (const it of items) {
+    let b = buckets.find((x) => x.sub === it.sub)
+    if (!b) buckets.push((b = { sub: it.sub, list: [] }))
+    b.list.push(it)
+  }
+  const out = []
+  while (buckets.some((b) => b.list.length)) {
+    for (const b of buckets) if (b.list.length) out.push(b.list.shift())
+  }
+  return out
+}
+
 /**
- * 自動穿插:把還沒排的小塊依「主類別」輪流接到排程尾端
- *   作業 → 家事 → 吉他 → 作業 → ...,可每 N 塊插一段休息
+ * 自動穿插:把還沒排的小塊接到排程尾端
+ *   - 主類別輪流:作業 → 家事 → 吉他 → 作業 → ...
+ *   - 同一個主類別內,次類別也輪流:作業 › 數學 → 作業 › 英文 → 作業 › 數學 → ...
+ *   可每 N 塊插一段休息
  */
 export function interleave(state, { breakEvery = 0, breakMinutes = 5 } = {}) {
   const scheduled = scheduledIds(state)
   const queues = state.groups
-    .map((g) => orderedItems(state, g.id).filter((it) => !scheduled.has(it.id)))
+    .map((g) => roundRobinBySub(orderedItems(state, g.id).filter((it) => !scheduled.has(it.id))))
     .filter((q) => q.length)
   const add = []
   let count = 0
@@ -363,12 +382,26 @@ export function reduce(state, a) {
     case 'setTimed':
       return { ...state, timed: Boolean(a.value) }
 
+    case 'dailyReset':
+      return dailyReset(state, a.today)
+
     case 'reset':
       return demoState()
 
     default:
       return state
   }
+}
+
+/**
+ * 每天換日(App 的「今天」,凌晨 3 點換日)清掉前一天的排程與待辦任務,只保留主類別(大標題)
+ *   - 次類別存在小塊上,小塊清掉後次類別也一併消失
+ *   - 舊資料沒有 date 欄位:只蓋上今天的日期,不清資料(避免更新後突然把使用者今天的內容清空)
+ */
+export function dailyReset(state, today = appTodayISO()) {
+  if (state.date === today) return state
+  if (!state.date) return { ...state, date: today }
+  return { ...state, date: today, items: [], schedule: [] }
 }
 
 export const DEMO_TEXT = `作業/數學/第1-4題 15分
@@ -382,9 +415,9 @@ export const DEMO_TEXT = `作業/數學/第1-4題 15分
 吉他/曲子/小星星 15分`
 
 export function demoState() {
-  return addParsed({ groups: [], items: [], schedule: [], startTime: '19:00', timed: false }, parseQuickAdd(DEMO_TEXT))
+  return addParsed(emptyState(), parseQuickAdd(DEMO_TEXT))
 }
 
 export function emptyState() {
-  return { groups: [], items: [], schedule: [], startTime: '19:00', timed: false }
+  return { groups: [], items: [], schedule: [], startTime: '19:00', timed: false, date: appTodayISO() }
 }

@@ -25,7 +25,7 @@ export default function Layout() {
 
   return (
     <div className="mx-auto flex h-full max-w-md flex-col bg-bg landscape:max-w-3xl">
-      <header className="pt-safe relative z-20 shrink-0" style={{ background: 'transparent' }}>
+      <header className="kb-hide pt-safe relative z-20 shrink-0" style={{ background: 'transparent' }}>
         <div style={{
           position: 'absolute', inset: 0,
           background: 'linear-gradient(135deg, var(--t-hero-from), var(--t-hero-to))',
@@ -67,7 +67,7 @@ export default function Layout() {
       </main>
 
       {/* 一般 flex 子元素而非 fixed:iOS 主畫面 App 對 fixed+bottom:0 的高度計算會留縫 */}
-      <nav className="relative z-10 shrink-0" style={{ background: 'transparent' }}>
+      <nav className="kb-hide relative z-10 shrink-0" style={{ background: 'transparent' }}>
         <div style={{
           position: 'absolute', inset: 0,
           background: 'var(--t-surface)',

@@ -141,12 +141,19 @@ body {
 }
 
 #root {
+  position: relative;
+  top: var(--app-top, 0px);          /* 鍵盤彈出時跟著 visualViewport 的位移,貼齊可視區域 */
   height: 100%;
-  height: var(--app-h, 100%);        /* 由 viewportFix.js 以 window.innerHeight 量測,避開 iOS 主畫面 App 的高度誤差 */
+  height: var(--app-h, 100%);        /* 由 viewportFix.js 以 visualViewport 量測,避開 iOS 工具列 / 鍵盤的高度誤差 */
   overflow-x: hidden;
   overflow-y: auto;                  /* 登入頁等沒有內部捲動容器的畫面在此捲動 */
   -webkit-overflow-scrolling: touch;
 }
+
+/* 鍵盤彈出時收起頂欄與底部導覽,把空間讓給輸入內容 */
+.kb-open .kb-hide { display: none; }
+/* 多留一段底部空間,最底下的輸入框才有辦法捲到畫面中間 */
+.kb-open main { padding-bottom: 40vh; }
 
 /* 表單與可讀內容仍可選取 / 複製 */
 input, textarea, select, [data-selectable] {
