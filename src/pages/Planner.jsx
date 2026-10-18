@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { newEntry } from '../lib/planner.js'
 import { usePlanner } from '../lib/usePlanner.js'
+import { useStore } from '../lib/store.jsx'
 import { DragProvider } from '../lib/dnd.jsx'
 import ScheduleList, { GhostCard } from '../components/planner/ScheduleList.jsx'
 import TaskPool from '../components/planner/TaskPool.jsx'
@@ -11,8 +12,15 @@ import { BREAK_COLOR, itemInfo } from '../components/planner/itemInfo.js'
  * 任務切塊排程:先把任務切成小塊丟進任務池,再拖到排程表決定順序
  * 手機:上排程、下任務池;寬螢幕:左右兩欄
  */
-export default function Planner() {
-  const [state, dispatch] = usePlanner()
+/** App 內的排程頁:資料每個帳號各自一份,換帳號時用 key 重新掛載,避免沿用上一個帳號的內容 */
+export function PlannerPage() {
+  const { userId } = useStore()
+  return <Planner key={userId ?? 'anon'} userId={userId ?? 'anon'} />
+}
+
+// userId 預設 'draft':本機試玩入口(planner-draft.html)沒有登入也能用
+export default function Planner({ userId = 'draft' }) {
+  const [state, dispatch] = usePlanner(userId)
   const [sheet, setSheet] = useState(null)
   const close = () => setSheet(null)
 
