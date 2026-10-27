@@ -1,5 +1,6 @@
 import { otherUser, useStore } from '../lib/store.jsx'
 import { formatDateTime } from '../lib/format.js'
+import { BadgeWall, StreakCard } from '../components/Achievements.jsx'
 
 export default function Points() {
   const { user, nameOf, ledger, balanceOf } = useStore()
@@ -18,6 +19,10 @@ export default function Points() {
           <p className="mt-1 text-3xl font-bold tabular-nums text-ink">{balanceOf(other)}</p>
         </div>
       </section>
+
+      <StreakCard />
+
+      <BadgeWall />
 
       <section>
         <h2 className="section-title">積分明細</h2>

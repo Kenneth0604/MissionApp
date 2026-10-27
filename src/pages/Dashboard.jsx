@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { isDaily, isReviewer, isTodoFor, otherUser, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
 import { AnimatedNumber } from '../lib/celebrate.jsx'
+import { StreakCard } from '../components/Achievements.jsx'
 
 export default function Dashboard() {
   const { user, nameOf, tasks, redemptions, balanceOf, reservedOf } = useStore()
@@ -28,6 +29,8 @@ export default function Dashboard() {
           <Link to="/rewards" className="rounded-full bg-white/20 px-3 py-1 text-sm">兌換獎勵</Link>
         </div>
       </section>
+
+      <StreakCard />
 
       <section className="grid grid-cols-3 gap-3">
         <Stat to="/tasks?tab=mine" label="待完成" value={todo.length} cls="text-warning" />

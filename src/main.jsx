@@ -9,6 +9,7 @@ import { registerServiceWorker } from './lib/push.js'
 import { installViewportFix } from './lib/viewportFix.js'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { CelebrationLayer } from './lib/celebrate.jsx'
+import { AchievementWatcher } from './components/Achievements.jsx'
 import './index.css'
 
 registerServiceWorker()
@@ -23,6 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <HashRouter>
             <StoreProvider>
               <App />
+              <AchievementWatcher />
             </StoreProvider>
             <CelebrationLayer />
           </HashRouter>
