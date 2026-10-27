@@ -8,6 +8,7 @@ import { ToastProvider } from './lib/toast.jsx'
 import { registerServiceWorker } from './lib/push.js'
 import { installViewportFix } from './lib/viewportFix.js'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { CelebrationLayer } from './lib/celebrate.jsx'
 import './index.css'
 
 registerServiceWorker()
@@ -23,6 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <StoreProvider>
               <App />
             </StoreProvider>
+            <CelebrationLayer />
           </HashRouter>
         </ToastProvider>
       </ThemeProvider>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { canHelp, isHelped, isReviewer, reviewerOf, useStore } from '../lib/store.jsx'
 import { useToast } from '../lib/toast.jsx'
+import { celebrate } from '../lib/celebrate.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import RewardTag from '../components/RewardTag.jsx'
 import ImageGallery from '../components/ImageGallery.jsx'
@@ -50,10 +51,20 @@ export default function TaskDetail() {
   const doubled = helped && task.reward_type === 'points'
   const isDailyTask = Boolean(task.recurrence_rule) // 每日任務:完成即核准,不需審核;每一期可寫當天說明
 
-  async function run(fn, okMsg) {
+  // 拿到積分 / 獎勵時要慶祝的內容
+  const pointsGained = task.reward_type === 'points' ? (doubled ? task.reward_points * 2 : task.reward_points) : 0
+  const party = (rect, label) =>
+    celebrate({
+      from: rect,
+      text: pointsGained ? `+${pointsGained}` : task.reward_type === 'reward' ? '🎁' : '✓',
+      sub: task.reward_type === 'reward' ? task.reward?.name ?? '獎勵' : label,
+    })
+
+  async function run(fn, okMsg, onDone) {
     setBusy(true)
     try {
       await fn()
+      onDone?.()
       if (okMsg) toast.success(okMsg)
     } catch (err) {
       toast.error(err)
@@ -68,11 +79,13 @@ export default function TaskDetail() {
     setReason('')
   }
 
-  function onSubmit() {
+  function onSubmit(e) {
     if (needsChoice && !choice) return toast.error('請選一個選項')
+    const rect = e?.currentTarget?.getBoundingClientRect()
     run(
       () => submitTask(task.id, choice || undefined, isDailyTask ? note : undefined),
       isDailyTask ? '已完成 ✓' : '已送出,等待審核',
+      isDailyTask ? () => party(rect, '完成!') : undefined, // 每日任務完成即核准,直接慶祝
     )
   }
 
@@ -215,7 +228,7 @@ export default function TaskDetail() {
       {canReview && !rejecting && (
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setRejecting(true)} disabled={busy} className="btn-danger-outline py-3.5">退回重做</button>
-          <button onClick={() => run(() => approveTask(task.id), '已核准')} disabled={busy} className="btn-success py-3.5">
+          <button onClick={(e) => { const rect = e.currentTarget.getBoundingClientRect(); run(() => approveTask(task.id), '已核准', () => party(rect, '已核准')) }} disabled={busy} className="btn-success py-3.5">
             核准{task.reward_type === 'points' ? ` +${doubled ? task.reward_points * 2 : task.reward_points}` : task.reward_type === 'reward' ? ` · ${task.reward?.name ?? '獎勵'}` : ''}
           </button>
         </div>

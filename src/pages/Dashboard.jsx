@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { isDaily, isReviewer, isTodoFor, otherUser, useStore } from '../lib/store.jsx'
 import TaskCard from '../components/TaskCard.jsx'
+import { AnimatedNumber } from '../lib/celebrate.jsx'
 
 export default function Dashboard() {
   const { user, nameOf, tasks, redemptions, balanceOf, reservedOf } = useStore()
@@ -20,7 +21,7 @@ export default function Dashboard() {
     <div className="space-y-5">
       <section className="hero rounded-3xl p-5 text-white shadow-lg">
         <p className="text-sm text-white/80">我的積分</p>
-        <p className="mt-1 text-5xl font-bold tabular-nums">{balance}</p>
+        <p className="mt-1 text-5xl font-bold tabular-nums"><AnimatedNumber value={balance} /></p>
         {reserved > 0 && <p className="mt-1 text-xs text-white/70">其中 {reserved} 點已申請兌換,待對方確認</p>}
         <div className="mt-4 flex gap-2">
           <Link to="/points" className="rounded-full bg-white/20 px-3 py-1 text-sm">積分明細</Link>
