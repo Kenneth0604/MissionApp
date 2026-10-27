@@ -1,20 +1,118 @@
-import { useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createSpring, createVelocityTracker, prefersReducedMotion, project, rubberband } from '../../lib/spring.js'
 import { DEFAULT_FLAG_TIME, PALETTE, orderedItems, scheduledIds, subsOfGroup } from '../../lib/planner.js'
 
+// 底部面板:彈簧滑入、可以往下拖關閉(放手時依速度決定關或彈回),✕ 也會滑出再關
+const OPEN = { damping: 1, response: 0.38 }
+const SETTLE = { damping: 0.8, response: 0.3 }
+const DISMISS = { damping: 1, response: 0.3 }
+
 export function Sheet({ title, onClose, children }) {
+  const panelRef = useRef(null)
+  const scrimRef = useRef(null)
+  const height = useRef(1)
+  const closingRef = useRef(false)
+  const reduced = useRef(prefersReducedMotion())
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  const spring = useRef(null)
+  if (!spring.current) {
+    spring.current = createSpring({
+      onUpdate: (y) => {
+        if (panelRef.current) panelRef.current.style.transform = `translate3d(0, ${y}px, 0)`
+        if (scrimRef.current) scrimRef.current.style.opacity = String(1 - Math.min(1, Math.max(0, y / height.current)))
+      },
+    })
+  }
+
+  const dismiss = (velocity = 0) => {
+    if (closingRef.current) return
+    closingRef.current = true
+    if (reduced.current) return closeRef.current()
+    height.current = panelRef.current?.offsetHeight || height.current
+    spring.current.to(height.current, { ...DISMISS, velocity: Math.max(0, velocity), onRest: () => closeRef.current() })
+  }
+
+  useLayoutEffect(() => {
+    const s = spring.current
+    height.current = panelRef.current?.offsetHeight || window.innerHeight
+    if (reduced.current) { s.set(0); return () => s.stop() }
+    s.set(height.current)
+    s.to(0, OPEN)
+    return () => s.stop()
+  }, [])
+
+  useEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    const tracker = createVelocityTracker()
+    let g = null
+    const onStart = (e) => {
+      if (e.target.closest('input,textarea,select,[data-nodrag]')) return
+      g = { startY: e.touches[0].clientY, scrollTop: el.scrollTop, decided: false, dragging: false }
+      tracker.reset()
+      tracker.add(g.startY, e.timeStamp)
+    }
+    const onMove = (e) => {
+      if (!g || closingRef.current) return
+      const y = e.touches[0].clientY
+      if (!g.decided) {
+        const dy = y - g.startY
+        if (Math.abs(dy) < 6) return
+        g.decided = true
+        if (!(g.scrollTop <= 0 && dy > 0) && !spring.current.animating) { g = null; return }
+        g.dragging = true
+        spring.current.stop()
+        g.origin = spring.current.value
+        g.startY = y
+      }
+      e.preventDefault()
+      tracker.add(y, e.timeStamp)
+      const raw = g.origin + (y - g.startY)
+      spring.current.set(raw < 0 ? rubberband(raw, height.current) : raw)
+    }
+    const onEnd = () => {
+      if (!g) return
+      const wasDragging = g.dragging
+      g = null
+      if (!wasDragging) return
+      const v = tracker.velocity()
+      if (spring.current.value + project(v) > height.current * 0.5 && v > -100) dismiss(v)
+      else spring.current.to(0, { ...SETTLE, velocity: v })
+    }
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd)
+    el.addEventListener('touchcancel', onEnd)
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', onEnd)
+    }
+  }, [])
+
   return (
     // 高度與位置跟著 visualViewport(--app-h / --app-top),鍵盤彈出時底部面板會貼在鍵盤上方而不是被蓋住
     <div
-      className="fixed inset-x-0 z-40 flex items-end justify-center bg-black/40 pointer-events-none"
+      className="fixed inset-x-0 z-40 flex items-end justify-center pointer-events-none"
       style={{ top: 'var(--app-top, 0px)', height: 'var(--app-h, 100%)' }}
     >
+      <div ref={scrimRef} className="absolute inset-0 bg-black/40" style={{ opacity: reduced.current ? 1 : 0 }} />
       <div
-        className="pointer-events-auto max-h-[85%] w-full max-w-md space-y-4 overflow-y-auto rounded-t-3xl p-5 pb-safe"
-        style={{ background: 'var(--t-bg)' }}
+        ref={panelRef}
+        className="pointer-events-auto relative max-h-[85%] w-full max-w-md space-y-4 overflow-y-auto overscroll-contain rounded-t-3xl p-5 pb-safe"
+        style={{
+          background: 'var(--t-bg)',
+          transform: reduced.current ? 'none' : 'translate3d(0, 100%, 0)',
+          willChange: 'transform',
+          boxShadow: '0 -8px 30px rgba(0,0,0,0.12)',
+        }}
       >
+        <div className="-mt-2 mx-auto h-1 w-9 rounded-full" style={{ background: 'var(--t-muted)' }} />
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-ink">{title}</h3>
-          <button onClick={onClose} className="px-2 text-muted" aria-label="關閉">✕</button>
+          <button onClick={() => dismiss()} className="px-2 text-muted active:scale-90 transition-transform" aria-label="關閉">✕</button>
         </div>
         {children}
       </div>
